@@ -11,7 +11,7 @@ def main():
     args = parser.parse_args()
     trigger = args.trigger
 
-    filename = f"copula_{trigger}.npz"
+    filename = f"../data/copula_{trigger}.npz"
     if not os.path.exists(filename):
         print(f"Error: {filename} not found.")
         return

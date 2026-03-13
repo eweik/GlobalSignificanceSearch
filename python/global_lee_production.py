@@ -22,8 +22,8 @@ def main(args):
     
     # 1. Load Nominal and Alternative Fits
     for m in mass_types:
-        fitfile_nom = f"fits/fitme_p5_{args.trigger}_{m}.json"
-        fitfile_alt = f"fits/fitme_p5alt_{args.trigger}_{m}.json"
+        fitfile_nom = f"../fits/fitme_p5_{args.trigger}_{m}.json"
+        fitfile_alt = f"../fits/fitme_p5alt_{args.trigger}_{m}.json"
         
         try:
             with open(fitfile_nom, "r") as j_nom, open(fitfile_alt, "r") as j_alt:

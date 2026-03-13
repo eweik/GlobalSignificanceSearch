@@ -1,6 +1,7 @@
 # GlobalSignificanceSearch: Multi-Channel Global LEE Framework
 
-This repository provides a high-performance statistical framework for evaluating global significance and the Look-Elsewhere Effect (LEE) in multi-channel invariant mass searches. Developed for the ATLAS MET Trigger Unsupervised Anomaly Detection search, it implements and compares three distinct methods for modeling channel correlations.
+This repository provides a high-performance statistical framework for evaluating global significance and the Look-Elsewhere Effect (LEE) in multi-channel invariant mass searches. 
+Developed for the Model Independent searches, it implements and compares three distinct methods for modeling channel correlations.
 
 ## Statistical Methods
 
@@ -34,7 +35,16 @@ chmod +x run/*.sh
 
 ## Usage
 
-### 1. Global Significance (LEE) Toys
+### 1. Extracting Empirical Copula
+Before generating toys, the rank-order matrix must be extracted from ATLAS ROOT ntuple
+
+```bash
+# Example usage (adjust arguments based on your script setup)
+python python/extract_copula.py /path/to/input/root/file /path/to/output/file/
+```
+* This parses the outlier events and maps their percentile ranks across all invariant mass definitions, saving the output to `data/copula_t1.npz`
+
+### 2. Global Significance (LEE) Toys
 To calculate the global test statistic distribution and account for the Look-Elsewhere Effect (LEE) across all search channels simultaneously:
 
 ```bash
@@ -45,7 +55,7 @@ cd run
 * Storage: Data is stored in the results/ directory as .npy files.
 * Output: The script automatically generates a comparison plot of the three methods once the pseudo-experiments are complete.
 
-### 2. Signal Injection Visualization
+### 3. Signal Injection Visualization
 To visually verify the physical "migration" of a Gaussian signal peak from the inclusive hub into exclusive sub-channels via the empirical copula:
 
 ```bash
