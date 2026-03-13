@@ -32,6 +32,7 @@ Ensure you have Python 3.8+ and the standard scientific stack (`numpy`, `scipy`,
 git clone <repo-url>
 cd GlobalSignificanceSearch
 chmod +x run/*.sh
+```
 
 ## Usage
 
