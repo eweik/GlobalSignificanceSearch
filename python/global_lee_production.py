@@ -22,8 +22,8 @@ def main(args):
     
     # 1. Load Nominal and Alternative Fits
     for m in mass_types:
-        fitfile_nom = f"/eos/atlas/atlascerngroupdisk/phys-exotics/jdm/lepdijet/AnomalyDetect23/stat/pyBH/figs/fitme_p5_{args.trigger}_{m}.json"
-        fitfile_alt = f"/eos/atlas/atlascerngroupdisk/phys-exotics/jdm/lepdijet/AnomalyDetect23/stat/pyBH/figs/fitme_p5alt_{args.trigger}_{m}.json"
+        fitfile_nom = f"fits/fitme_p5_{args.trigger}_{m}.json"
+        fitfile_alt = f"fits/fitme_p5alt_{args.trigger}_{m}.json"
         
         try:
             with open(fitfile_nom, "r") as j_nom, open(fitfile_alt, "r") as j_alt:
@@ -123,7 +123,14 @@ def main(args):
         
         stats.append(max_t)
 
-    np.save(f"global_stat_{args.trigger}_{args.method}.npy", stats)
+    # dynamically find the root of the repo, then the results/ dir
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    results_dir = os.path.join(base_dir, "results")
+    os.makedirs(results_dir, exist_ok=True)
+
+    out_file = os.path.join(results_dir, f"global_stat_{args.trigger}_{args.method}.npy")
+    np.save(out_file, stats)
+    print(f"Successfully saved {args.toys} toys to {out_file}")
 
 if __name__ == '__main__':
     p = ArgumentParser()
