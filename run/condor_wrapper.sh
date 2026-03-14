@@ -14,6 +14,17 @@ if [ -n "$_CONDOR_SCRATCH_DIR" ]; then
     cd $_CONDOR_SCRATCH_DIR
 fi
 
+# Find where run_toys.py actually ended up
+if [ -f "python/run_toys.py" ]; then
+    PY_PATH="python/run_toys.py"
+elif [ -f "run_toys.py" ]; then
+    PY_PATH="run_toys.py"
+else
+    echo "ERROR: run_toys.py not found in root or python/ directory!"
+    ls -R
+    exit 1
+fi
+
 # Run the python script (pointing to the python/ folder)
 python3 python/run_toys.py \
     --trigger "$TRIGGER" \

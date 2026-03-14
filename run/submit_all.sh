@@ -8,6 +8,11 @@ TOYS_PER_JOB=${3:-1000}
 # Calculate how many jobs are needed per method
 N_JOBS=$((TOTAL_TOYS / TOYS_PER_JOB))
 
+# Ensure local directories exist before submission
+mkdir -p run/logs results
+
+echo "Directories verified. Commencing submission..."
+
 echo "================================================="
 echo " Trigger:          $TRIGGER"
 echo " Total Toys/Method: $TOTAL_TOYS"
