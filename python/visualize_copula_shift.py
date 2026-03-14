@@ -4,6 +4,49 @@ import os
 import matplotlib.pyplot as plt
 import scipy.stats as stats
 import argparse
+import array
+import ROOT
+
+# Suppress ROOT popups and fitting print spam
+ROOT.gROOT.SetBatch(True)
+ROOT.gErrorIgnoreLevel = ROOT.kFatal
+
+# ==========================================
+# ROOT FITTING CLASS
+# ==========================================
+class FiveParam2015:
+    """ROOT callable for the 5-parameter background fit"""
+    def __call__(self, x, par):
+        xx = x[0] / 13600.0  # Assuming 13.6 TeV CMS energy for Run 3
+        if xx <= 0 or xx >= 1: return 0.0
+        ff1 = par[0] * ROOT.TMath.Power((1.0 - xx), par[1])
+        ff2 = ROOT.TMath.Power(xx, (par[2] + par[3] * ROOT.TMath.Log(xx) + par[4] * ROOT.TMath.Log(xx) * ROOT.TMath.Log(xx)))
+        return ff1 * ff2
+
+def fit_and_get_chi2(counts, bins, params, fmin, fmax, name="hist"):
+    """Creates a ROOT TH1D, fits it with TF1, and returns the chi2/ndf."""
+    edges = array.array('d', bins)
+    h = ROOT.TH1D(name, name, len(edges)-1, edges)
+    h.SetDirectory(0)
+    
+    for i, val in enumerate(counts):
+        if val > 0:
+            h.SetBinContent(i+1, val)
+            h.SetBinError(i+1, ROOT.TMath.Sqrt(val))
+            
+    tf1 = ROOT.TF1(f"tf1_{name}", FiveParam2015(), fmin, fmax, 5)
+    for i, p in enumerate(params[:5]):
+        tf1.SetParameter(i, p)
+        if p == 0.0: 
+            tf1.FixParameter(i, 0.0)
+            
+    # I: Integral over bin, S: Save result, M: Improve fit, R: Use TF1 range, 0: No draw, Q: Quiet
+    fit_res = h.Fit(tf1, "ISMR0Q")
+    
+    ndf = tf1.GetNDF()
+    chi2 = tf1.GetChisquare()
+    return chi2 / ndf if ndf > 0 else float('inf')
+
 
 # ==========================================
 # VISUALIZATION CONFIGURATION FLAGS
@@ -44,10 +87,14 @@ TRIGGER_OVERLAPS = {
     "t7": {
         "jj": 1.000, "bb": 0.923, "jb": 0.951, "je": 0.984, "jm": 0.986, 
         "jg": 0.998, "be": 0.975, "bm": 0.974, "bg": 0.993
+    },
+    "default": {
+        "jj": 1.000, "bb": 0.0, "jb": 0.0, "je": 0.0, "jm": 0.0, 
+        "jg": 0.0, "be": 0.0, "bm": 0.0, "bg": 0.0
     }
 }
 
-def FiveParam(Ecm, x_center, p1, p2, p3, p4, p5):
+def FiveParam_NP(Ecm, x_center, p1, p2, p3, p4, p5):
     x = x_center / Ecm
     nlog = np.log(x)
     return p1 * np.power((1.0 - x), p2) * np.power(x, (p3 + p4 * nlog + p5 * nlog * nlog))
@@ -58,14 +105,17 @@ def load_fit(trigger, channel):
     
     if not os.path.exists(fitfile): 
         print(f"Warning: Fit file not found -> {fitfile}")
-        return None, None
+        return None, None, None, None, None
         
     with open(fitfile, "r") as j:
         d = json.load(j)
-        v_bins = ATLAS_BINS[(ATLAS_BINS >= float(d['fmin'])) & (ATLAS_BINS <= float(d['fmax']))]
+        fmin, fmax = float(d['fmin']), float(d['fmax'])
+        v_bins = ATLAS_BINS[(ATLAS_BINS >= fmin) & (ATLAS_BINS <= fmax)]
         c = (v_bins[:-1] + v_bins[1:]) / 2
         widths = np.diff(v_bins)
-        return FiveParam(13600., c, *d['parameters']) * widths, v_bins
+        params = [float(p) for p in d['parameters']]
+        counts = FiveParam_NP(13600., c, *params[:5]) * widths
+        return counts, v_bins, params, fmin, fmax
 
 def main():
     parser = argparse.ArgumentParser(description="Visualize signal injection migration via empirical copula.")
@@ -80,7 +130,7 @@ def main():
 
     np.random.seed(42) 
     
-    B_jj, bins_jj = load_fit(trigger, "jj")
+    B_jj, bins_jj, params_jj, fmin_jj, fmax_jj = load_fit(trigger, "jj")
     if B_jj is None:
         print(f"Error: Could not load M_jj fit for {trigger}.")
         return
@@ -89,26 +139,32 @@ def main():
     cdf_jj = np.cumsum(B_jj) / np.sum(B_jj)
     
     toy_jj_random = np.random.poisson(B_jj)
-    
     sig_events_jj = np.random.normal(args.mass, args.width, args.events)
     sig_hist_jj, _ = np.histogram(sig_events_jj, bins=bins_jj)
     
     toy_jj_base = np.random.poisson(B_jj) + sig_hist_jj
     residual_jj = np.where(B_jj > 0, (toy_jj_base - B_jj) / B_jj, 0)
+
+    # Perform ROOT Fits for M_jj labels
+    chi2_jj_rand = fit_and_get_chi2(toy_jj_random, bins_jj, params_jj, fmin_jj, fmax_jj, "h_jj_rand")
+    chi2_jj_base = fit_and_get_chi2(toy_jj_base, bins_jj, params_jj, fmin_jj, fmax_jj, "h_jj_base")
     
     plt.figure(figsize=(12, 7))
     plt.plot(centers_jj, B_jj, color='gray', linestyle='--', linewidth=1.5, label=f'Analytic Fit $H_0$ ($M_{{jj}}$)')
     
+    label_jj_rand = f'Random $M_{{jj}}$ Toy [$\chi^2$/ndf={chi2_jj_rand:.2f}]'
+    label_jj_base = f'Injected $M_{{jj}}$ Gaussian [$\chi^2$/ndf={chi2_jj_base:.2f}]'
+
     if PLOT_AS_POINTS:
         errors_jj_base = np.sqrt(toy_jj_base) if SHOW_ERRORS else None
         errors_jj_rand = np.sqrt(toy_jj_random) if SHOW_ERRORS else None
         plt.errorbar(centers_jj, toy_jj_random, yerr=errors_jj_rand, fmt='o', color='green', 
-                     markersize=2, elinewidth=0.8, capsize=0, label='Random $M_{{jj}}$ Toy', alpha=0.4)
+                     markersize=2, elinewidth=0.8, capsize=0, label=label_jj_rand, alpha=0.4)
         plt.errorbar(centers_jj, toy_jj_base, yerr=errors_jj_base, fmt='s', color='blue', 
-                     markersize=3, elinewidth=0.8, capsize=0, label='Injected $M_{{jj}}$ Gaussian', alpha=0.8)
+                     markersize=3, elinewidth=0.8, capsize=0, label=label_jj_base, alpha=0.8)
     else:
-        plt.step(centers_jj, toy_jj_random, where='mid', color='green', linewidth=1, label='Random $M_{{jj}}$ Toy', alpha=0.4)
-        plt.step(centers_jj, toy_jj_base, where='mid', color='blue', linewidth=1.5, label='Injected $M_{{jj}}$ Gaussian', alpha=0.8)
+        plt.step(centers_jj, toy_jj_random, where='mid', color='green', linewidth=1, label=label_jj_rand, alpha=0.4)
+        plt.step(centers_jj, toy_jj_base, where='mid', color='blue', linewidth=1.5, label=label_jj_base, alpha=0.8)
     
     plt.axvline(args.mass, color='blue', linestyle=':', linewidth=1.5, label=f'Injection Peak ({args.mass} GeV)')
     plt.xscale('log')
@@ -123,7 +179,6 @@ def main():
     plt.grid(True, alpha=0.15)
     plt.tight_layout()
     
-    # Dynamically find the results directory
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     results_dir = os.path.join(base_dir, "results")
     os.makedirs(results_dir, exist_ok=True)
@@ -146,7 +201,7 @@ def main():
         return
 
     for channel in CHANNELS:
-        B_xy, bins_xy = load_fit(trigger, channel)
+        B_xy, bins_xy, params_xy, fmin_xy, fmax_xy = load_fit(trigger, channel)
         if B_xy is None: continue
         
         centers_xy = (bins_xy[:-1] + bins_xy[1:]) / 2
@@ -181,13 +236,18 @@ def main():
                 peak_idx = np.argmax(sig_hist_xy)
                 copula_peak_mass = centers_xy[peak_idx]
         
+        # Calculate chi2/ndf for each generated toy against the analytic hypothesis
+        chi2_naive = fit_and_get_chi2(toy_naive, bins_xy, params_xy, fmin_xy, fmax_xy, f"h_{channel}_naive")
+        chi2_linear = fit_and_get_chi2(toy_linear, bins_xy, params_xy, fmin_xy, fmax_xy, f"h_{channel}_linear")
+        chi2_copula = fit_and_get_chi2(toy_copula, bins_xy, params_xy, fmin_xy, fmax_xy, f"h_{channel}_copula")
+
         plt.figure(figsize=(12, 7))
         plt.plot(centers_xy, B_xy, color='gray', linestyle='--', linewidth=1.5, label=f'Analytic Fit $H_0$ ($M_{{{channel}}}$)')
         
         plot_configs = [
-            ('Naive (No Transfer)', toy_naive, 'red', 'o'),
-            ('Linear-Overlap (Bin-Locked)', toy_linear, 'orange', 's'),
-            ('Empirical Copula (Migrated)', toy_copula, 'green', 'D')
+            (f'Naive (No Transfer) [$\chi^2$/ndf={chi2_naive:.2f}]', toy_naive, 'red', 'o'),
+            (f'Linear-Overlap [$\chi^2$/ndf={chi2_linear:.2f}]', toy_linear, 'orange', 's'),
+            (f'Empirical Copula [$\chi^2$/ndf={chi2_copula:.2f}]', toy_copula, 'green', 'D')
         ]
         
         for label, counts, color, marker in plot_configs:

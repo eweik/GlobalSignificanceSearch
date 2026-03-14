@@ -1,47 +1,36 @@
 #!/bin/bash
-# run_all_toys.sh - Generate global significance toys and plot test statistics
+# Exit immediately if a command exits with a non-zero status
+set -e
 
-TRIGGER="t1"
-TOYS=10000
-CMS=13600.0
-FORCE=0
+# Default variables
+TRIGGER=${1:-"t1"}      # First argument is the trigger, defaults to "t1"
+TOYS=${2:-100000}       # Second argument is number of toys, defaults to 100000
+CHIMAX=2.0
 
-# Parse command line arguments
-while [[ "$#" -gt 0 ]]; do
-    case $1 in
-        --trigger) TRIGGER="$2"; shift ;;
-        --toys) TOYS="$2"; shift ;;
-        --cms) CMS="$2"; shift ;;
-        --force) FORCE=1 ;;
-        *) echo "Unknown parameter passed: $1"; exit 1 ;;
-    esac
-    shift
+echo "======================================================"
+echo " Starting $TOYS Pseudo-Experiments for Trigger: $TRIGGER"
+echo "======================================================"
+
+# Loop through all 3 methods
+for METHOD in naive linear copula; do
+    echo ""
+    echo ">>> Running method: $METHOD"
+
+    # Assuming this script is run from the 'scripts/' directory
+    python3 ../python/run_toys.py \
+        --trigger "$TRIGGER" \
+        --method "$METHOD" \
+        --toys "$TOYS" \
+        --fit \
+        --chimax "$CHIMAX" \
+        -b
+
+    echo ">>> Completed $METHOD"
 done
 
-echo "========================================================="
-echo "Global Significance Toy Production - Trigger: $TRIGGER"
-echo "========================================================="
+echo ""
+echo "======================================================"
+echo " All methods completed successfully for $TRIGGER!"
+echo " Results are stored in the ../results/ directory."
+echo "======================================================"
 
-METHODS=("naive" "linear" "copula")
-
-for METHOD in "${METHODS[@]}"; do
-    FILE="../results/global_stat_${TRIGGER}_${METHOD}.npy"
-
-    # Check if toys already exist and we are not forcing an overwrite
-    if [ -f "$FILE" ] && [ "$FORCE" -eq 0 ]; then
-        echo "Found existing toy data for $METHOD ($FILE). Skipping generation..."
-    else
-        echo "Running $METHOD toy generation..."
-        python ../python/global_lee_production.py \
-            --trigger "$TRIGGER" \
-            --toys "$TOYS" \
-            --method "$METHOD" \
-            --cms "$CMS"
-    fi
-done
-
-echo "---------------------------------------------------------"
-echo "Plotting Test Statistics..."
-python ../python/plot_test_statistics.py --trigger "$TRIGGER"
-
-echo "Pipeline complete!"
