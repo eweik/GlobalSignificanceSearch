@@ -2,6 +2,7 @@
 import os
 import sys
 import json
+import time
 import numpy as np
 from argparse import ArgumentParser
 
@@ -67,8 +68,10 @@ def main(args):
     fit_failures = 0
     print(f"Generating {args.toys} {args.method} toys for {args.trigger}...")
     
+    # Start the timer
+    start_time = time.time()
+    
     # 3. Main Toy Loop
-    # Changed to a while loop to ensure we get exactly args.toys successful fits
     while len(stats) < args.toys:
         max_t = 0.0
         toy_successful = True
@@ -140,11 +143,15 @@ def main(args):
                 
                 max_t = max(max_t, fast_bumphunter_stat(toy, active_bkg))
         
-        # Only record the stat if all channels for this toy passed their fits
         if toy_successful:
             stats.append(max_t)
         else:
             fit_failures += 1
+
+    # End the timer
+    elapsed_time = time.time() - start_time
+    hours, rem = divmod(elapsed_time, 3600)
+    minutes, seconds = divmod(rem, 60)
 
     # Finish progress bar cleanly
     sys.stdout.write(f"\rProgress: [{'=' * 20}] 100% \n")
@@ -152,11 +159,17 @@ def main(args):
 
     results_dir = os.path.join(base_dir, "results")
     os.makedirs(results_dir, exist_ok=True)
-    out_file = os.path.join(results_dir, f"global_stat_{args.trigger}_{args.method}.npy")
+    if args.jobid:
+        out_file = os.path.join(results_dir, f"global_stat_{args.trigger}_{args.method}_{args.jobid}.npy")
+    else:
+        out_file = os.path.join(results_dir, f"global_stat_{args.trigger}_{args.method}.npy")
     np.save(out_file, stats)
     
+    print("-" * 50)
     print(f"Successfully saved {len(stats)} toys to {out_file}")
     if args.fit: print(f"Total fit rejections (chi2 > {args.chimax} or invalid): {fit_failures}")
+    print(f"Time Elapsed: {int(hours)}h {int(minutes)}m {seconds:.2f}s")
+    print("-" * 50)
 
 if __name__ == '__main__':
     p = ArgumentParser()
@@ -167,4 +180,6 @@ if __name__ == '__main__':
     p.add_argument('-b', '--batch', action='store_true')
     p.add_argument('--fit', action='store_true')
     p.add_argument('--chimax', type=float, default=2.0)
+    p.add_argument('--jobid', type=str, default="", help="Appends ID to output file") # ADD THIS
     main(p.parse_args())
+
