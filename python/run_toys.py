@@ -56,7 +56,7 @@ def main(args):
 
     # 2. Setup Copula Matrices
     if args.method == "copula":
-        f = np.load(os.path.join(base_dir, f"copula_{args.trigger}.npz"))
+        f = np.load(os.path.join(base_dir, "data", f"copula_{args.trigger}.npz"))
         matrix, col_names = f['copula'], list(f['columns'])
         cdfs = {m: np.cumsum(b) / np.sum(b) for m, b in bkg_expectations.items()}
         
@@ -64,15 +64,18 @@ def main(args):
         n_mother_exp = np.sum(bkg_expectations[mother_key])
         channel_scales = {m: np.sum(b) / n_mother_exp for m, b in bkg_expectations.items()}
 
+
     stats = []
     fit_failures = 0
-    print(f"Generating {args.toys} {args.method} toys for {args.trigger}...")
+    attempts = 0
+    max_attempts = args.toys * 50  # Allow up to a 98% rejection rate
     
-    # Start the timer
+    print(f"Generating {args.toys} {args.method} toys for {args.trigger}...")
     start_time = time.time()
     
     # 3. Main Toy Loop
-    while len(stats) < args.toys:
+    while len(stats) < args.toys and attempts < max_attempts:
+        attempts += 1
         max_t = 0.0
         toy_successful = True
         
@@ -80,7 +83,7 @@ def main(args):
         completed = len(stats)
         if completed > 0 and completed % max(1, (args.toys // 20)) == 0:
             progress = int((completed / args.toys) * 100)
-            sys.stdout.write(f"\rProgress: [{('=' * (progress//5)).ljust(20)}] {progress}% ")
+            sys.stdout.write(f"\rProgress: [{('=' * (progress//5)).ljust(20)}] {progress}% (Attempts: {attempts}) ")
             sys.stdout.flush()
         # --------------------------
 
@@ -167,7 +170,9 @@ def main(args):
     
     print("-" * 50)
     print(f"Successfully saved {len(stats)} toys to {out_file}")
-    if args.fit: print(f"Total fit rejections (chi2 > {args.chimax} or invalid): {fit_failures}")
+    if args.fit:
+        print(f"Total fit rejections (chi2 > {args.chimax} or invalid): {fit_failures}")
+        print(f"Overall Acceptance Rate: {(len(stats) / attempts) * 100:.2f}%")
     print(f"Time Elapsed: {int(hours)}h {int(minutes)}m {seconds:.2f}s")
     print("-" * 50)
 

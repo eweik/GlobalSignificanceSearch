@@ -6,18 +6,6 @@ try:
 except ImportError:
     ROOT = None
 
-class FiveParam2015:
-    """ROOT TF1 callable class for 5-parameter background function."""
-    def __init__(self, cms):
-        self.cms = cms
-        
-    def __call__(self, x, par):
-        xx = x[0] / self.cms
-        if xx <= 0 or xx >= 1: return 0.0
-        ff1 = par[0] * ROOT.TMath.Power((1.0 - xx), par[1])
-        ff2 = ROOT.TMath.Power(xx, (par[2] + par[3] * ROOT.TMath.Log(xx) + par[4] * ROOT.TMath.Log(xx) * ROOT.TMath.Log(xx)))
-        return ff1 * ff2
-
 def setup_root_env(batch=True, fit_enabled=False):
     """Configures global ROOT settings."""
     if not ROOT:
@@ -28,12 +16,22 @@ def setup_root_env(batch=True, fit_enabled=False):
         ROOT.gErrorIgnoreLevel = ROOT.kFatal # Suppress GSL roundoff noise
 
 def create_tf1_template(name, cms, fmin, fmax, params):
-    """Creates and returns a pre-configured ROOT TF1 object."""
-    back = ROOT.TF1(name, FiveParam2015(cms), fmin, fmax, 5)
+    """Creates and returns a pre-configured ROOT TF1 object using a pure C++ string formula."""
+    
+    # Define the math formula purely in C++ to avoid PyROOT garbage collection bugs
+    # and to drastically speed up the fitting process.
+    formula = (
+        f"[0] * TMath::Power(1.0 - (x/{cms}), [1]) * "
+        f"TMath::Power((x/{cms}), [2] + [3]*TMath::Log(x/{cms}) + [4]*TMath::Log(x/{cms})*TMath::Log(x/{cms}))"
+    )
+    
+    back = ROOT.TF1(name, formula, fmin, fmax)
+    
     for idx, val in enumerate(params[:5]):
         back.SetParameter(idx, float(val))
         if float(val) == 0.0: 
             back.FixParameter(idx, 0.0)
+            
     return back
 
 def do_fit_and_get_bkg(toy_data, m, original_bkg, channel_info, tf1_templates, args):

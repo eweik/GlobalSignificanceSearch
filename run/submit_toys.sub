@@ -1,28 +1,27 @@
-# submit_toys.sub
+# run/submit_toys.sub
 
-executable            = scripts/condor_wrapper.sh
-arguments             = $(trigger) $(method) $(toys_per_job) $(ProcId)
+executable              = run/condor_wrapper.sh
+arguments               = $(trigger) $(method) $(toys_per_job) $(ProcId)
 
-# Send logs to a dedicated folder
-output                = logs/job.$(ClusterId).$(ProcId).out
-error                 = logs/job.$(ClusterId).$(ProcId).err
-log                   = logs/job.$(ClusterId).log
+output                  = run/logs/job.$(ClusterId).$(ProcId).out
+error                   = run/logs/job.$(ClusterId).$(ProcId).err
+log                     = run/logs/job.$(ClusterId).log
 
-# Transfer your entire repo to the worker node so it has access to the fits/ dir
-should_transfer_files = YES
+should_transfer_files   = YES
 when_to_transfer_output = ON_EXIT
-transfer_input_files  = src/, scripts/, fits/, copula_$(trigger).npz
-transfer_output_files = results/
 
-# Request resources. "longlunch" gives the job up to 2 hours to finish.
-+JobFlavour           = "longlunch"
-request_cpus          = 1
-request_memory        = 2GB
+transfer_input_files    = src/, python/, fits/, data/copula_$(trigger).npz
+transfer_output_files   = results/
 
-# Variables to pass in from the command line
-trigger               = t1
-method                = copula
-toys_per_job          = 1000
++JobFlavour             = "longlunch"
+request_cpus            = 1
+request_memory          = 2GB
 
-# Queue 100 jobs (100 jobs * 1000 toys = 100,000 toys total)
-queue 100
+# These variables will be overwritten by the command line
+trigger                 = t1
+method                  = copula
+toys_per_job            = 1000
+n_jobs                  = 1
+
+# Queue the dynamic number of jobs
+queue $(n_jobs)
