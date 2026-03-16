@@ -6,9 +6,13 @@ import time
 import numpy as np
 from argparse import ArgumentParser
 
-# Add repository root to path
-base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.append(base_dir)
+# Setup paths so it can find the src module whether on lxplus or Condor
+current_script_dir = os.path.dirname(os.path.abspath(__file__))
+repo_root = os.path.dirname(current_script_dir)
+if repo_root not in sys.path:
+    sys.path.append(repo_root)
+if os.getcwd() not in sys.path:
+    sys.path.append(os.getcwd())
 
 from src.config import ATLAS_BINS, TRIGGER_OVERLAPS
 from src.models import FiveParam, FiveParam_alt
@@ -16,6 +20,15 @@ from src.stats import fast_bumphunter_stat
 from src.fitting import setup_root_env, create_tf1_template, do_fit_and_get_bkg
 
 def main(args):
+    # Condor requires the output directory to exist in the worker node's local slot
+    os.makedirs("results", exist_ok=True)
+    
+    # Path logic: Worker nodes are flat, local runs have structure
+    if os.path.exists("data") and os.path.exists("fits"):
+        base_dir = os.getcwd()
+    else:
+        base_dir = repo_root
+
     if args.fit or args.batch:
         setup_root_env(batch=args.batch, fit_enabled=args.fit)
 
@@ -23,10 +36,9 @@ def main(args):
     bkg_expectations, syst_envelopes, channel_info, tf1_templates = {}, {}, {}, {}
     overlap_map = TRIGGER_OVERLAPS.get(args.trigger.lower(), TRIGGER_OVERLAPS["default"])
     
-    # 1. Load Data
     for m in mass_types:
-        fitfile_nom = os.path.join(base_dir, f"fits/fitme_p5_{args.trigger}_{m}.json")
-        fitfile_alt = os.path.join(base_dir, f"fits/fitme_p5alt_{args.trigger}_{m}.json")
+        fitfile_nom = os.path.join(base_dir, "fits", f"fitme_p5_{args.trigger}_{m}.json")
+        fitfile_alt = os.path.join(base_dir, "fits", f"fitme_p5alt_{args.trigger}_{m}.json")
         
         try:
             with open(fitfile_nom, "r") as j_nom, open(fitfile_alt, "r") as j_alt:
@@ -52,11 +64,11 @@ def main(args):
             continue
 
     if not bkg_expectations:
-        print("Error: No background fits found."); sys.exit(1)
+        print(f"Error: No background fits found in {os.path.join(base_dir, 'fits')}"); sys.exit(1)
 
-    # 2. Setup Copula Matrices
     if args.method == "copula":
-        f = np.load(os.path.join(base_dir, "data", f"copula_{args.trigger}.npz"))
+        copula_path = os.path.join(base_dir, "data", f"copula_{args.trigger}.npz")
+        f = np.load(copula_path)
         matrix, col_names = f['copula'], list(f['columns'])
         cdfs = {m: np.cumsum(b) / np.sum(b) for m, b in bkg_expectations.items()}
         
@@ -64,28 +76,23 @@ def main(args):
         n_mother_exp = np.sum(bkg_expectations[mother_key])
         channel_scales = {m: np.sum(b) / n_mother_exp for m, b in bkg_expectations.items()}
 
-
     stats = []
-    fit_failures = 0
-    attempts = 0
-    max_attempts = args.toys * 50  # Allow up to a 98% rejection rate
+    fit_failures, attempts = 0, 0
+    max_attempts = args.toys * 50  # Give it plenty of room to fail and try again
     
     print(f"Generating {args.toys} {args.method} toys for {args.trigger}...")
     start_time = time.time()
     
-    # 3. Main Toy Loop
     while len(stats) < args.toys and attempts < max_attempts:
         attempts += 1
         max_t = 0.0
         toy_successful = True
         
-        # --- Progress Bar Logic ---
         completed = len(stats)
         if completed > 0 and completed % max(1, (args.toys // 20)) == 0:
             progress = int((completed / args.toys) * 100)
             sys.stdout.write(f"\rProgress: [{('=' * (progress//5)).ljust(20)}] {progress}% (Attempts: {attempts}) ")
             sys.stdout.flush()
-        # --------------------------
 
         if args.method == "naive":
             for m, b in bkg_expectations.items():
@@ -151,27 +158,20 @@ def main(args):
         else:
             fit_failures += 1
 
-    # End the timer
-    elapsed_time = time.time() - start_time
-    hours, rem = divmod(elapsed_time, 3600)
-    minutes, seconds = divmod(rem, 60)
-
-    # Finish progress bar cleanly
     sys.stdout.write(f"\rProgress: [{'=' * 20}] 100% \n")
     sys.stdout.flush()
 
-    results_dir = os.path.join(base_dir, "results")
-    os.makedirs(results_dir, exist_ok=True)
-    if args.jobid:
-        out_file = os.path.join(results_dir, f"global_stat_{args.trigger}_{args.method}_{args.jobid}.npy")
-    else:
-        out_file = os.path.join(results_dir, f"global_stat_{args.trigger}_{args.method}.npy")
+    out_file = os.path.join("results", f"global_stat_{args.trigger}_{args.method}_{args.jobid}.npy")
     np.save(out_file, stats)
+    
+    elapsed_time = time.time() - start_time
+    hours, rem = divmod(elapsed_time, 3600)
+    minutes, seconds = divmod(rem, 60)
     
     print("-" * 50)
     print(f"Successfully saved {len(stats)} toys to {out_file}")
-    if args.fit:
-        print(f"Total fit rejections (chi2 > {args.chimax} or invalid): {fit_failures}")
+    if args.fit: 
+        print(f"Total toys thrown out completely (after 5 fit retries): {fit_failures}")
         print(f"Overall Acceptance Rate: {(len(stats) / attempts) * 100:.2f}%")
     print(f"Time Elapsed: {int(hours)}h {int(minutes)}m {seconds:.2f}s")
     print("-" * 50)
@@ -185,6 +185,5 @@ if __name__ == '__main__':
     p.add_argument('-b', '--batch', action='store_true')
     p.add_argument('--fit', action='store_true')
     p.add_argument('--chimax', type=float, default=2.0)
-    p.add_argument('--jobid', type=str, default="", help="Appends ID to output file") # ADD THIS
+    p.add_argument('--jobid', type=str, default="local")
     main(p.parse_args())
-
