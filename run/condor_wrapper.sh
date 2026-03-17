@@ -25,8 +25,8 @@ else
     exit 1
 fi
 
-# Run the python script (pointing to the python/ folder)
-python3 python/run_toys.py \
+# Run the python script using the dynamically detected PY_PATH
+python3 $PY_PATH \
     --trigger "$TRIGGER" \
     --method "$METHOD" \
     --toys "$TOYS" \

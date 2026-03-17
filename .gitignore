@@ -12,3 +12,4 @@ __pycache__/
 results/
 plots/*.pdf
 plots/*.png
+run/logs/

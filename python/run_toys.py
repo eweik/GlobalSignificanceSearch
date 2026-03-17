@@ -6,7 +6,6 @@ import time
 import numpy as np
 from argparse import ArgumentParser
 
-# Setup paths so it can find the src module whether on lxplus or Condor
 current_script_dir = os.path.dirname(os.path.abspath(__file__))
 repo_root = os.path.dirname(current_script_dir)
 if repo_root not in sys.path:
@@ -20,10 +19,8 @@ from src.stats import fast_bumphunter_stat
 from src.fitting import setup_root_env, create_tf1_template, do_fit_and_get_bkg
 
 def main(args):
-    # Condor requires the output directory to exist in the worker node's local slot
     os.makedirs("results", exist_ok=True)
     
-    # Path logic: Worker nodes are flat, local runs have structure
     if os.path.exists("data") and os.path.exists("fits"):
         base_dir = os.getcwd()
     else:
@@ -78,7 +75,7 @@ def main(args):
 
     stats = []
     fit_failures, attempts = 0, 0
-    max_attempts = args.toys * 50  # Give it plenty of room to fail and try again
+    max_attempts = args.toys * 50 
     
     print(f"Generating {args.toys} {args.method} toys for {args.trigger}...")
     start_time = time.time()
@@ -99,7 +96,8 @@ def main(args):
                 env = syst_envelopes[m]
                 toy = np.random.poisson(np.maximum(0, b + (np.random.normal(0, 1, size=len(b)) * env)))
                 
-                active_bkg, fit_ok = do_fit_and_get_bkg(toy, m, b, channel_info, tf1_templates, args)
+                # UPDATED: Passing syst_envelopes[m]
+                active_bkg, fit_ok = do_fit_and_get_bkg(toy, m, b, channel_info, tf1_templates, args, env)
                 if not fit_ok: 
                     toy_successful = False
                     break
@@ -123,7 +121,8 @@ def main(args):
                     ind_counts = np.random.poisson(np.maximum(0, ind_b + (np.random.normal(0, 1, size=len(ind_b)) * syst_envelopes[m] * (1-ov_frac))))
                     toy = np.maximum(0, ov_counts + ind_counts)
                 
-                active_bkg, fit_ok = do_fit_and_get_bkg(toy, m, b, channel_info, tf1_templates, args)
+                # UPDATED: Passing syst_envelopes[m]
+                active_bkg, fit_ok = do_fit_and_get_bkg(toy, m, b, channel_info, tf1_templates, args, syst_envelopes[m])
                 if not fit_ok: 
                     toy_successful = False
                     break
@@ -146,7 +145,8 @@ def main(args):
                 syst_shift = np.random.normal(0, 1, size=len(b)) * syst_envelopes[m]
                 toy = np.maximum(0, np.round(toy_base + syst_shift).astype(int))
                 
-                active_bkg, fit_ok = do_fit_and_get_bkg(toy, m, b, channel_info, tf1_templates, args)
+                # UPDATED: Passing syst_envelopes[m]
+                active_bkg, fit_ok = do_fit_and_get_bkg(toy, m, b, channel_info, tf1_templates, args, syst_envelopes[m])
                 if not fit_ok: 
                     toy_successful = False
                     break
@@ -171,7 +171,7 @@ def main(args):
     print("-" * 50)
     print(f"Successfully saved {len(stats)} toys to {out_file}")
     if args.fit: 
-        print(f"Total toys thrown out completely (after 5 fit retries): {fit_failures}")
+        print(f"Total toys thrown out completely (after 100 fit retries): {fit_failures}")
         print(f"Overall Acceptance Rate: {(len(stats) / attempts) * 100:.2f}%")
     print(f"Time Elapsed: {int(hours)}h {int(minutes)}m {seconds:.2f}s")
     print("-" * 50)
@@ -187,3 +187,4 @@ if __name__ == '__main__':
     p.add_argument('--chimax', type=float, default=2.0)
     p.add_argument('--jobid', type=str, default="local")
     main(p.parse_args())
+
