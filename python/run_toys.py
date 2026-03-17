@@ -94,9 +94,9 @@ def main(args):
         if args.method == "naive":
             for m, b in bkg_expectations.items():
                 env = syst_envelopes[m]
-                toy = np.random.poisson(np.maximum(0, b + (np.random.normal(0, 1, size=len(b)) * env)))
+                # toy = np.random.poisson(np.maximum(0, b + (np.random.normal(0, 1, size=len(b)) * env)))
+                toy = np.random.poisson(b)
                 
-                # UPDATED: Passing syst_envelopes[m]
                 active_bkg, fit_ok = do_fit_and_get_bkg(toy, m, b, channel_info, tf1_templates, args, env)
                 if not fit_ok: 
                     toy_successful = False
@@ -106,7 +106,7 @@ def main(args):
         
         elif args.method == "linear":
             jj_b = bkg_expectations['jj']
-            jj_pseudo = np.random.poisson(np.maximum(0, jj_b + (np.random.normal(0, 1, size=len(jj_b)) * syst_envelopes['jj'])))
+            jj_pseudo = np.random.poisson(jj_b)
             jj_res_raw = np.where(jj_b > 0, (jj_pseudo - jj_b) / jj_b, 0)
             
             for m, b in bkg_expectations.items():
@@ -118,8 +118,8 @@ def main(args):
                     ov_counts = (b * ov_frac) * (1 + mapped_res)
                     
                     ind_b = b * (1 - ov_frac)
-                    ind_counts = np.random.poisson(np.maximum(0, ind_b + (np.random.normal(0, 1, size=len(ind_b)) * syst_envelopes[m] * (1-ov_frac))))
-                    toy = np.maximum(0, ov_counts + ind_counts)
+                    ind_counts = np.random.poisson(ind_b)
+                    toy = np.maximum(0, np.round(ov_counts + ind_counts).astype(int))
                 
                 # UPDATED: Passing syst_envelopes[m]
                 active_bkg, fit_ok = do_fit_and_get_bkg(toy, m, b, channel_info, tf1_templates, args, syst_envelopes[m])
@@ -140,10 +140,12 @@ def main(args):
                 target_n = int(len(v) * channel_scales[m])
                 if target_n < len(v): v = np.random.choice(v, size=target_n, replace=False)
                 
-                U = np.clip(v - np.random.uniform(0, 1e-6, size=len(v)), 0, 1)
+                # U = np.clip(v - np.random.uniform(0, 1e-6, size=len(v)), 0, 1)
+                # Apply a Gaussian smear (e.g., sigma=0.005) to break up bootstrap duplicates
+                U = np.clip(v + np.random.normal(0, 0.0005, size=len(v)), 0, 1)
+                # U = np.clip(v + np.random.normal(0, 0.00005, size=len(v)), 0, 1)
                 toy_base = np.bincount(np.clip(np.searchsorted(cdfs[m], U), 0, len(b)-1), minlength=len(b))
-                syst_shift = np.random.normal(0, 1, size=len(b)) * syst_envelopes[m]
-                toy = np.maximum(0, np.round(toy_base + syst_shift).astype(int))
+                toy = toy_base
                 
                 # UPDATED: Passing syst_envelopes[m]
                 active_bkg, fit_ok = do_fit_and_get_bkg(toy, m, b, channel_info, tf1_templates, args, syst_envelopes[m])
