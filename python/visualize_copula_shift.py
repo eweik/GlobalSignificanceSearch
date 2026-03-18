@@ -53,7 +53,7 @@ def fit_and_get_chi2(counts, bins, params, fmin, fmax, name="hist"):
 # ==========================================
 PLOT_AS_POINTS        = True 
 SHOW_ERRORS           = True 
-SHOW_COPULA_PEAK_LINE = True 
+SHOW_COPULA_PEAK_LINE = False
 
 ATLAS_BINS = np.array([99,112,125,138,151,164,177,190, 203, 216, 229, 243, 257, 272, 287, 303, 319, 335, 352, 369, 387, 405, 424, 443, 462, 482, 502, 523, 544, 566, 588, 611, 634, 657, 681, 705, 730, 755, 781, 807, 834, 861, 889, 917, 946, 976, 1006, 1037, 1068, 1100, 1133, 1166, 1200, 1234, 1269, 1305, 1341, 1378, 1416, 1454, 1493, 1533, 1573, 1614, 1656, 1698, 1741, 1785, 1830, 1875, 1921, 1968, 2016, 2065, 2114, 2164, 2215, 2267, 2320, 2374, 2429, 2485, 2542, 2600, 2659, 2719, 2780, 2842, 2905, 2969, 3034, 3100, 3167, 3235, 3305, 3376, 3448, 3521, 3596, 3672, 3749, 3827, 3907, 3988, 4070, 4154, 4239, 4326, 4414, 4504, 4595, 4688, 4782, 4878, 4975, 5074, 5175, 5277, 5381, 5487, 5595, 5705, 5817, 5931, 6047, 6165, 6285, 6407, 6531, 6658, 6787, 6918, 7052, 7188, 7326, 7467, 7610, 7756, 7904, 8055, 8208, 8364, 8523, 8685, 8850, 9019, 9191, 9366, 9544, 9726, 9911, 10100, 10292, 10488, 10688, 10892, 11100, 11312, 11528, 11748, 11972, 12200, 12432, 12669, 12910, 13156])
 CHANNELS = ["jb", "bb", "je", "jm", "jg", "be", "bm", "bg"]
@@ -180,7 +180,7 @@ def main():
     plt.tight_layout()
     
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    results_dir = os.path.join(base_dir, "results")
+    results_dir = os.path.join(base_dir, "plots")
     os.makedirs(results_dir, exist_ok=True)
     
     filename_jj = os.path.join(results_dir, f"spike_points_{trigger}_jj_original.png")
@@ -239,7 +239,7 @@ def main():
         # Calculate chi2/ndf for each generated toy against the analytic hypothesis
         chi2_naive = fit_and_get_chi2(toy_naive, bins_xy, params_xy, fmin_xy, fmax_xy, f"h_{channel}_naive")
         chi2_linear = fit_and_get_chi2(toy_linear, bins_xy, params_xy, fmin_xy, fmax_xy, f"h_{channel}_linear")
-        chi2_copula = fit_and_get_chi2(toy_copula, bins_xy, params_xy, fmin_xy, fmax_xy, f"h_{channel}_copula")
+        # chi2_copula = fit_and_get_chi2(toy_copula, bins_xy, params_xy, fmin_xy, fmax_xy, f"h_{channel}_copula")
 
         plt.figure(figsize=(12, 7))
         plt.plot(centers_xy, B_xy, color='gray', linestyle='--', linewidth=1.5, label=f'Analytic Fit $H_0$ ($M_{{{channel}}}$)')
@@ -247,7 +247,7 @@ def main():
         plot_configs = [
             (f'Naive (No Transfer) [$\chi^2$/ndf={chi2_naive:.2f}]', toy_naive, 'red', 'o'),
             (f'Linear-Overlap [$\chi^2$/ndf={chi2_linear:.2f}]', toy_linear, 'orange', 's'),
-            (f'Empirical Copula [$\chi^2$/ndf={chi2_copula:.2f}]', toy_copula, 'green', 'D')
+            #(f'Empirical Copula [$\chi^2$/ndf={chi2_copula:.2f}]', toy_copula, 'green', 'D')
         ]
         
         for label, counts, color, marker in plot_configs:

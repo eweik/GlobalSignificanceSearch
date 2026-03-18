@@ -4,8 +4,10 @@ executable              = run/condor_wrapper.sh
 arguments               = $(trigger) $(method) $(toys_per_job) $(ProcId)
 
 # Adding trigger and method here prevents logs from overwriting each other
-output                  = run/logs/job.$(trigger).$(method).$(ClusterId).$(ProcId).out
-error                   = run/logs/job.$(trigger).$(method).$(ClusterId).$(ProcId).err
+# output                  = run/logs/job.$(trigger).$(method).$(ClusterId).$(ProcId).out
+# error                   = run/logs/job.$(trigger).$(method).$(ClusterId).$(ProcId).err
+output                  = /dev/null
+error                   = /dev/null
 log                     = run/logs/job.$(trigger).$(method).$(ClusterId).log
 
 should_transfer_files   = YES
@@ -14,7 +16,8 @@ when_to_transfer_output = ON_EXIT
 transfer_input_files    = src, python, fits, data
 transfer_output_files   = results
 
-+JobFlavour             = "longlunch"
++JobFlavour             = "workday"
+# +JobFlavour             = "longlunch"
 # +JobFlavour             = "microcentury"
 request_cpus            = 1
 request_memory          = 2GB

@@ -28,10 +28,10 @@ echo "Events:    $EVENTS"
 echo "========================================="
 
 # Execute the python script with the provided parameters
-python ../python/visualize_copula_shift.py \
+python3 python/visualize_copula_shift.py \
     --trigger "$TRIGGER" \
     --mass "$MASS" \
     --width "$WIDTH" \
     --events "$EVENTS"
 
-echo "Done! Check the results/spike_points_*.png files for results."
+echo "Done! Check the plots/spike_points_*.png files for results."
