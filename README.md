@@ -5,10 +5,10 @@ Developed for the Model Independent searches, it implements and compares three d
 
 ## Statistical Methods
 
-This framework handles the penalization of p-values when searching across multiple mass spectra (e.g., M_jj, M_jb, M_bb) by modeling how these channels share events and fluctuate together.
+This framework handles the penalization of p-values when searching across multiple mass spectra (e.g., $M_{jj}, $M_{jb}$, $M_{bb}$) by modeling how these channels share events and fluctuate together.
 
 1. **Naive (Independent):** Assumes zero correlation between channels. This is the most conservative approach, resulting in the highest trial factor penalization.
-2. **Linear (Hub-and-Spoke):** Uses row-normalized overlap matrices to lock the fluctuations of exclusive channels to the inclusive M_jj "hub." This accounts for the fact that many events in sub-channels are subsets of the dijet stream.
+2. **Linear (Hub-and-Spoke):** Uses row-normalized overlap matrices to lock the fluctuations of exclusive channels to the inclusive $M_{jj}$ "hub." This accounts for the fact that many events in sub-channels are subsets of the dijet stream.
 3. **Empirical Copula (Migrated):** The most sophisticated method. It uses event-by-event rank dependencies to preserve exact kinematic correlations. It accurately models mass migration (e.g., energy loss in b-jets or detector resolution effects) by propagating fluctuations through an empirical CDF transformation.
 
 ## Project Structure
@@ -64,7 +64,7 @@ To visually verify the physical "migration" of a Gaussian signal peak from the i
 cd run
 ./run_injection.sh --trigger t1 --mass 2000 --width 80 --events 5000
 ```
-* **Process:** Injects a hypothetical signal into the M_jj distribution and maps the corresponding events into M_jb, M_bb, etc.
+* **Process:** Injects a hypothetical signal into the $M_{jj}$ distribution and maps the corresponding events into $M_{jb}$, $M_{bb}$, etc.
 * **Output:** Plots showing the source spike and the resulting migrated peaks are saved to the `results/` directory as `.png` files.
 
 ### 4. HTCondor Mass Production
@@ -92,3 +92,14 @@ cd run
 ./merge_all.sh
 ```
 * **Process:** Scans the `results/` directory, concatenates all valid arrays, and outputs the final merged files (e.g., `final_t1_linear.npy`).
+
+
+### 6. Visualizing the Survival Curve (Global vs. Local Z)
+Once all trigger results are merged, generate the final Experiment-Wide Global Significance plot to compare the Look-Elsewhere Effect (LEE) penalty across methods.
+```bash
+python python/local_to_global_z.py
+```
+* **Process** This script loads the merged `.npy` files across all triggers, calculates the global p-values, and maps them to global Z-scores using the normal survival function.
+* **Output** Generates the master "Survival Curve" plot (e.g., `plots/Experiment_Wide_Global_Z.png`), visually demonstrating how the Linear method safely recovers global significance compared to the Naive baseline.
+
+
