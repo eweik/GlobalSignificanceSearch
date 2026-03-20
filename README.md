@@ -5,10 +5,10 @@ Developed for the Model Independent searches, it implements and compares three d
 
 ## Statistical Methods
 
-This framework handles the penalization of p-values when searching across multiple mass spectra (e.g., $M_{jj}$, $M_{jb}$, $M_{bb}$) by modeling how these channels share events and fluctuate together.
+This framework handles the penalization of p-values when searching across multiple mass spectra (e.g., M_jj, M_jb, M_bb) by modeling how these channels share events and fluctuate together.
 
 1. **Naive (Independent):** Assumes zero correlation between channels. This is the most conservative approach, resulting in the highest trial factor penalization.
-2. **Linear (Hub-and-Spoke):** Uses row-normalized overlap matrices to lock the fluctuations of exclusive channels to the inclusive $M_{jj}$ "hub." This accounts for the fact that many events in sub-channels are subsets of the dijet stream.
+2. **Linear (Hub-and-Spoke):** Uses row-normalized overlap matrices to lock the fluctuations of exclusive channels to the inclusive M_jj "hub." This accounts for the fact that many events in sub-channels are subsets of the dijet stream.
 3. **Empirical Copula (Migrated):** The most sophisticated method. It uses event-by-event rank dependencies to preserve exact kinematic correlations. It accurately models mass migration (e.g., energy loss in b-jets or detector resolution effects) by propagating fluctuations through an empirical CDF transformation.
 
 ## Project Structure
@@ -16,7 +16,7 @@ This framework handles the penalization of p-values when searching across multip
 * **data/**: Pre-computed empirical copula matrices (*.npz)
 * **fits/**: JSON parameters for nominal and alternative fits
 * **results/**: Output directory for LEE toys (*.npy) and plots (*.png)
-* **run/**: Bash scripts (Entry points for the pipeline)
+* **run/**: Bash scripts (Entry points for the pipeline, cluster submission, and merging)
 * **src/**: Core Python package (reusable logic)
 * **python/**: Execution scripts (Global LEE and visualization)
 
@@ -26,7 +26,7 @@ The `fast_bumphunter_stat` utility included in `src/stats.py` is a highly optimi
 
 ## Installation
 
-Ensure you have Python 3.8+ and the standard scientific stack (`numpy`, `scipy`, `matplotlib`) installed.
+Ensure you have Python 3.8+ and the standard scientific stack (`numpy`, `scipy`, `matplotlib`) installed. 
 
 ```bash
 git clone <repo-url>
@@ -36,25 +36,26 @@ chmod +x run/*.sh
 
 ## Usage
 
+The `run/` directory contains all necessary bash scripts to execute the workflow locally or on the HTCondor cluster.
+
 ### 1. Extracting Empirical Copula
-Before generating toys, the rank-order matrix must be extracted from ATLAS ROOT ntuple
-
-```bash
-# Example usage (adjust arguments based on your script setup)
-python python/extract_copula.py /path/to/input/root/file /path/to/output/file/
-```
-* This parses the outlier events and maps their percentile ranks across all invariant mass definitions, saving the output to `data/copula_t1.npz`
-
-### 2. Global Significance (LEE) Toys
-To calculate the global test statistic distribution and account for the Look-Elsewhere Effect (LEE) across all search channels simultaneously:
+Before generating toys using the Copula method, the rank-order matrix must be extracted from the ATLAS ROOT ntuple.
 
 ```bash
 cd run
-./run_all_toys.sh --trigger t1 --toys 10000 --cms 13600.0
+./run_extract_copular.sh /path/to/input/root/file /path/to/output/file/
 ```
-* Process: This generates $t_{max}$ distributions using the Naive, Linear, and Copula methods.
-* Storage: Data is stored in the results/ directory as .npy files.
-* Output: The script automatically generates a comparison plot of the three methods once the pseudo-experiments are complete.
+* **Process:** This parses the events and maps their percentile ranks across all invariant mass definitions, saving the output to `data/copula_t1.npz`.
+
+### 2. Global Significance (LEE) Toys (Local Run)
+To calculate the global test statistic distribution and account for the Look-Elsewhere Effect (LEE) locally:
+
+```bash
+cd run
+./run_all_toys.sh --trigger t1 --toys 100 --cms 13600.0
+```
+* **Process:** Generates local test statistic distributions using the Naive, Linear, and Copula methods.
+* **Storage:** Data is stored in the `results/` directory as `.npy` files.
 
 ### 3. Signal Injection Visualization
 To visually verify the physical "migration" of a Gaussian signal peak from the inclusive hub into exclusive sub-channels via the empirical copula:
@@ -63,7 +64,31 @@ To visually verify the physical "migration" of a Gaussian signal peak from the i
 cd run
 ./run_injection.sh --trigger t1 --mass 2000 --width 80 --events 5000
 ```
+* **Process:** Injects a hypothetical signal into the M_jj distribution and maps the corresponding events into M_jb, M_bb, etc.
+* **Output:** Plots showing the source spike and the resulting migrated peaks are saved to the `results/` directory as `.png` files.
 
-* Process: This injects a hypothetical signal into the $M_{jj}$ distribution and maps the corresponding events into $M_{jb}$, $M_{bb}$, etc.
-* Output: Plots showing the source spike and the resulting migrated peaks are saved to the `results/` directory as `.png` files.
+### 4. HTCondor Mass Production
+To generate the massive toy datasets required for discovery-level significance, submit the jobs to the HTCondor cluster. The submission scripts rely on `submit_toys.sub` for the job requirements and `condor_wrapper.sh` to set up the LCG environment on the worker nodes.
 
+**To submit jobs for a single trigger:**
+```bash
+cd run
+# Format: ./submit_all.sh <trigger> <total_toys> <toys_per_job>
+./submit_all.sh t1 100000 1000
+```
+
+**To submit jobs for ALL triggers simultaneously:**
+```bash
+cd run
+# Format: ./submit_all_triggers.sh <total_toys> <toys_per_job>
+./submit_all_triggers.sh 100000 1000
+```
+
+### 5. Merging Cluster Results
+Once all HTCondor jobs have finished, merge the thousands of individual `.npy` outputs into single arrays for the final global significance calculation.
+
+```bash
+cd run
+./merge_all.sh
+```
+* **Process:** Scans the `results/` directory, concatenates all valid arrays, and outputs the final merged files (e.g., `final_t1_linear.npy`).

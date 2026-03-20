@@ -239,7 +239,7 @@ def main():
         # Calculate chi2/ndf for each generated toy against the analytic hypothesis
         chi2_naive = fit_and_get_chi2(toy_naive, bins_xy, params_xy, fmin_xy, fmax_xy, f"h_{channel}_naive")
         chi2_linear = fit_and_get_chi2(toy_linear, bins_xy, params_xy, fmin_xy, fmax_xy, f"h_{channel}_linear")
-        # chi2_copula = fit_and_get_chi2(toy_copula, bins_xy, params_xy, fmin_xy, fmax_xy, f"h_{channel}_copula")
+        chi2_copula = fit_and_get_chi2(toy_copula, bins_xy, params_xy, fmin_xy, fmax_xy, f"h_{channel}_copula")
 
         plt.figure(figsize=(12, 7))
         plt.plot(centers_xy, B_xy, color='gray', linestyle='--', linewidth=1.5, label=f'Analytic Fit $H_0$ ($M_{{{channel}}}$)')
@@ -247,7 +247,7 @@ def main():
         plot_configs = [
             (f'Naive (No Transfer) [$\chi^2$/ndf={chi2_naive:.2f}]', toy_naive, 'red', 'o'),
             (f'Linear-Overlap [$\chi^2$/ndf={chi2_linear:.2f}]', toy_linear, 'orange', 's'),
-            #(f'Empirical Copula [$\chi^2$/ndf={chi2_copula:.2f}]', toy_copula, 'green', 'D')
+            (f'Empirical Copula [$\chi^2$/ndf={chi2_copula:.2f}]', toy_copula, 'green', 'D')
         ]
         
         for label, counts, color, marker in plot_configs:
