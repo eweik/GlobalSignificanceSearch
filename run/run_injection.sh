@@ -2,7 +2,7 @@
 # run_injection.sh - Run signal injection visualizations manually from bash
 
 # Default parameters
-TRIGGER="t1"
+TRIGGER="t2"
 MASS=2000.0
 WIDTH=80.0
 EVENTS=5000

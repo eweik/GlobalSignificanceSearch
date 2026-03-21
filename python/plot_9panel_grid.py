@@ -45,16 +45,16 @@ def fit_and_get_chi2(counts, bins, params, fmin, fmax, name="hist"):
     chi2 = tf1.GetChisquare()
     return chi2 / ndf if ndf > 0 else float('inf')
 
-
 # ==========================================
 # VISUALIZATION CONFIGURATION FLAGS
 # ==========================================
 PLOT_AS_POINTS        = True 
 SHOW_ERRORS           = True 
-SHOW_COPULA_PEAK_LINE = False
+SHOW_COPULA_PEAK_LINE = False 
 
 ATLAS_BINS = np.array([99,112,125,138,151,164,177,190, 203, 216, 229, 243, 257, 272, 287, 303, 319, 335, 352, 369, 387, 405, 424, 443, 462, 482, 502, 523, 544, 566, 588, 611, 634, 657, 681, 705, 730, 755, 781, 807, 834, 861, 889, 917, 946, 976, 1006, 1037, 1068, 1100, 1133, 1166, 1200, 1234, 1269, 1305, 1341, 1378, 1416, 1454, 1493, 1533, 1573, 1614, 1656, 1698, 1741, 1785, 1830, 1875, 1921, 1968, 2016, 2065, 2114, 2164, 2215, 2267, 2320, 2374, 2429, 2485, 2542, 2600, 2659, 2719, 2780, 2842, 2905, 2969, 3034, 3100, 3167, 3235, 3305, 3376, 3448, 3521, 3596, 3672, 3749, 3827, 3907, 3988, 4070, 4154, 4239, 4326, 4414, 4504, 4595, 4688, 4782, 4878, 4975, 5074, 5175, 5277, 5381, 5487, 5595, 5705, 5817, 5931, 6047, 6165, 6285, 6407, 6531, 6658, 6787, 6918, 7052, 7188, 7326, 7467, 7610, 7756, 7904, 8055, 8208, 8364, 8523, 8685, 8850, 9019, 9191, 9366, 9544, 9726, 9911, 10100, 10292, 10488, 10688, 10892, 11100, 11312, 11528, 11748, 11972, 12200, 12432, 12669, 12910, 13156])
-CHANNELS_8 = ["jb", "bb", "je", "jm", "jg", "be", "bm", "bg"] # 8 propagation channels
+CHANNELS_8 = ["jb", "bb", "je", "jm", "jg", "be", "bm", "bg"]
+ALL_CHANNELS = ["jj"] + CHANNELS_8
 
 TRIGGER_OVERLAPS = {
     "t1": { "jj": 1.000, "bb": 0.754, "jb": 0.845, "je": 0.852, "jm": 0.849, "jg": 0.729, "be": 0.772, "bm": 0.753, "bg": 0.622 },
@@ -95,66 +95,17 @@ def main():
     parser.add_argument('--trigger', type=str, default='t1', help="Trigger stream (e.g., t1, t2)")
     parser.add_argument('--mass', type=float, default=2000.0, help="Mass of the injected Gaussian signal (GeV)")
     parser.add_argument('--width', type=float, default=80.0, help="Width of the injected Gaussian signal (GeV)")
-    parser.add_argument('--events', type=int, default=5000, help="Number of signal events to inject into the hub (M_jj)")
+    parser.add_argument('--events', type=int, default=5000, help="Number of signal events to inject")
+    parser.add_argument('--inject', type=str, default='bb', help="Mass channel to inject the signal into (e.g., jj, bb, jb)")
     args = parser.parse_args()
     
     trigger = args.trigger.lower()
+    inj_channel = args.inject.lower()
     overlap_map = TRIGGER_OVERLAPS.get(trigger, TRIGGER_OVERLAPS["default"])
     np.random.seed(42) 
     
-    # Setup Figure and 3x3 Grid
-    fig, axes = plt.subplots(3, 3, figsize=(18, 15))
-    axes = axes.flatten() # Flatten to 1D array of 9 axes for easier indexing
-    
     # ---------------------------------------------------------
-    # 1. PROCESS AND PLOT PRIMARY HUB (M_jj) ON axes[0]
-    # ---------------------------------------------------------
-    B_jj, bins_jj, params_jj, fmin_jj, fmax_jj = load_fit(trigger, "jj")
-    if B_jj is None:
-        print(f"Error: Could not load M_jj fit for {trigger}.")
-        return
-        
-    centers_jj = (bins_jj[:-1] + bins_jj[1:]) / 2
-    cdf_jj = np.cumsum(B_jj) / np.sum(B_jj)
-    
-    toy_jj_random = np.random.poisson(B_jj)
-    sig_events_jj = np.random.normal(args.mass, args.width, args.events)
-    sig_hist_jj, _ = np.histogram(sig_events_jj, bins=bins_jj)
-    
-    toy_jj_base = np.random.poisson(B_jj) + sig_hist_jj
-    residual_jj = np.where(B_jj > 0, (toy_jj_base - B_jj) / B_jj, 0)
-
-    chi2_jj_rand = fit_and_get_chi2(toy_jj_random, bins_jj, params_jj, fmin_jj, fmax_jj, "h_jj_rand")
-    chi2_jj_base = fit_and_get_chi2(toy_jj_base, bins_jj, params_jj, fmin_jj, fmax_jj, "h_jj_base")
-    
-    ax_jj = axes[0]
-    ax_jj.plot(centers_jj, B_jj, color='gray', linestyle='--', linewidth=1.5, label=f'Analytic Fit $H_0$')
-    
-    label_jj_rand = f'Random Toy [$\chi^2$={chi2_jj_rand:.1f}]'
-    label_jj_base = f'Injected Signal [$\chi^2$={chi2_jj_base:.1f}]'
-
-    if PLOT_AS_POINTS:
-        err_base = np.sqrt(toy_jj_base) if SHOW_ERRORS else None
-        err_rand = np.sqrt(toy_jj_random) if SHOW_ERRORS else None
-        ax_jj.errorbar(centers_jj, toy_jj_random, yerr=err_rand, fmt='o', color='green', markersize=2, elinewidth=0.8, label=label_jj_rand, alpha=0.4)
-        ax_jj.errorbar(centers_jj, toy_jj_base, yerr=err_base, fmt='s', color='blue', markersize=3, elinewidth=0.8, label=label_jj_base, alpha=0.8)
-    else:
-        ax_jj.step(centers_jj, toy_jj_random, where='mid', color='green', linewidth=1, label=label_jj_rand, alpha=0.4)
-        ax_jj.step(centers_jj, toy_jj_base, where='mid', color='blue', linewidth=1.5, label=label_jj_base, alpha=0.8)
-    
-    ax_jj.axvline(args.mass, color='blue', linestyle=':', linewidth=1.5, label=f'Injection ({args.mass} GeV)')
-    ax_jj.set_xscale('log')
-    ax_jj.set_yscale('log')
-    ax_jj.set_xlim(bins_jj[0], 6500) 
-    ax_jj.set_ylim(0.5, np.max(toy_jj_base) * 100)
-    ax_jj.set_title(f'PRIMARY CHANNEL: $M_{{jj}}$', fontsize=14, fontweight='bold')
-    ax_jj.set_xlabel('Mass [GeV]', fontsize=11)
-    ax_jj.set_ylabel('Events per Bin', fontsize=11)
-    ax_jj.legend(frameon=True, fontsize=9, loc='upper right')
-    ax_jj.grid(True, alpha=0.15)
-
-    # ---------------------------------------------------------
-    # 2. LOAD COPULA MATRIX FOR SUB-CHANNELS
+    # 1. LOAD COPULA MATRIX FOR PROPAGATION
     # ---------------------------------------------------------
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     copula_path = os.path.join(base_dir, "data", f"copula_{trigger}.npz")
@@ -162,92 +113,200 @@ def main():
         f = np.load(copula_path)
         matrix, cols = f['copula'], list(f['columns'])
         idx_jj = cols.index("Mjj")
-        sort_idx = np.argsort(matrix[:, idx_jj])
-        sorted_matrix = matrix[sort_idx]
+        sort_idx_jj = np.argsort(matrix[:, idx_jj])
+        sorted_matrix_jj = matrix[sort_idx_jj] # Sorted by Mjj for forward propagation
     except Exception as e:
         print(f"Error loading copula matrix from {copula_path}: {e}")
         return
 
     # ---------------------------------------------------------
-    # 3. PROCESS AND PLOT THE 8 SUB-CHANNELS ON axes[1] to axes[8]
+    # 2. GENERATE SIGNAL & BACK-PROPAGATE VIA COPULA ONLY
     # ---------------------------------------------------------
-    for i, channel in enumerate(CHANNELS_8):
-        ax = axes[i + 1] # Offset by 1 because axes[0] is jj
+    # Generate the initial raw signal in the injection channel
+    sig_events_inj = np.random.normal(args.mass, args.width, args.events)
+    
+    B_jj, bins_jj, params_jj, fmin_jj, fmax_jj = load_fit(trigger, "jj")
+    centers_jj = (bins_jj[:-1] + bins_jj[1:]) / 2
+    cdf_jj = np.cumsum(B_jj) / np.sum(B_jj)
+    
+    # 2A: COPULA HUB (Correlated Back-propagation)
+    if inj_channel == 'jj':
+        sig_events_copula_jj = sig_events_inj
+    else:
+        B_inj, bins_inj, _, _, _ = load_fit(trigger, inj_channel)
+        if B_inj is None:
+            print(f"Error loading fit for injection channel {inj_channel}. Falling back to jj.")
+            sig_events_copula_jj = sig_events_inj
+        else:
+            centers_inj = (bins_inj[:-1] + bins_inj[1:]) / 2
+            cdf_inj = np.cumsum(B_inj) / np.sum(B_inj)
+            
+            ranks_inj = np.interp(sig_events_inj, centers_inj, cdf_inj)
+            
+            idx_inj = cols.index(f"M{inj_channel}")
+            sort_idx_inj = np.argsort(matrix[:, idx_inj])
+            sorted_matrix_inj = matrix[sort_idx_inj] 
+            
+            idx_closest_inj = np.searchsorted(sorted_matrix_inj[:, idx_inj], ranks_inj)
+            idx_closest_inj = np.clip(idx_closest_inj, 0, len(sorted_matrix_inj) - 1)
+            
+            migrated_ranks_jj = sorted_matrix_inj[idx_closest_inj, idx_jj]
+            valid_mask = migrated_ranks_jj >= 0
+            sig_events_copula_jj = np.interp(migrated_ranks_jj[valid_mask], cdf_jj, centers_jj)
+
+    # 2B: LINEAR HUB (Strictly literal - No back-propagation)
+    # The Linear method assumes it can only propagate what exists natively in M_jj. 
+    # If the signal wasn't injected into jj, the linear method sees absolutely nothing.
+    if inj_channel == 'jj':
+        sig_events_linear_jj = np.random.normal(args.mass, args.width, args.events)
+    else:
+        sig_events_linear_jj = np.array([])
         
-        B_xy, bins_xy, params_xy, fmin_xy, fmax_xy = load_fit(trigger, channel)
-        if B_xy is None: 
+    if len(sig_events_linear_jj) > 0:
+        sig_hist_linear_jj, _ = np.histogram(sig_events_linear_jj, bins=bins_jj)
+    else:
+        sig_hist_linear_jj = np.zeros_like(B_jj)
+        
+    residual_jj_linear = np.where(B_jj > 0, sig_hist_linear_jj / B_jj, 0)
+
+    # ---------------------------------------------------------
+    # 3. PLOT ALL 9 PANELS UNIFORMLY
+    # ---------------------------------------------------------
+    fig, axes = plt.subplots(3, 3, figsize=(18, 15))
+    axes = axes.flatten()
+    
+    for i, channel in enumerate(ALL_CHANNELS):
+        ax = axes[i]
+        
+        B_ch, bins_ch, params_ch, fmin_ch, fmax_ch = load_fit(trigger, channel)
+        if B_ch is None: 
             ax.set_title(f'$M_{{{channel}}}$ (Data Missing)')
             ax.axis('off')
             continue
             
-        centers_xy = (bins_xy[:-1] + bins_xy[1:]) / 2
-        eff = overlap_map.get(channel, 0.1)
-        cdf_xy = np.cumsum(B_xy) / np.sum(B_xy)
+        centers_ch = (bins_ch[:-1] + bins_ch[1:]) / 2
+        cdf_ch = np.cumsum(B_ch) / np.sum(B_ch)
         
-        toy_naive = np.random.poisson(B_xy)
-        
-        # --- FIXED LINEAR TOY GENERATION ---
-        aligned_residual_jj = np.interp(centers_xy, centers_jj, residual_jj)
-        ov_counts = (B_xy * eff) * (1 + aligned_residual_jj)
-        
-        ind_b = np.maximum(0, B_xy * (1 - eff))
-        ind_counts = np.random.poisson(ind_b)
-        
-        toy_linear = np.maximum(0, np.round(ov_counts + ind_counts).astype(int))
-        # -----------------------------------
-        
-        idx_xy = cols.index(f"M{channel}")
-        toy_copula = np.random.poisson(B_xy)
-        copula_peak_mass = None 
-        
-        ranks_jj = np.interp(sig_events_jj, centers_jj, cdf_jj)
-        idx_closest = np.searchsorted(sorted_matrix[:, idx_jj], ranks_jj)
-        idx_closest = np.clip(idx_closest, 0, len(sorted_matrix)-1)
-        
-        migrated_ranks_xy = sorted_matrix[idx_closest, idx_xy]
-        valid_ranks = migrated_ranks_xy[migrated_ranks_xy >= 0]
-        
-        if len(valid_ranks) > 0:
-            migrated_masses_xy = np.interp(valid_ranks, cdf_xy, centers_xy)
-            sig_hist_xy, _ = np.histogram(migrated_masses_xy, bins=bins_xy)
+        # =========================================================
+        # BRANCH A: THIS IS THE INJECTION CHANNEL
+        # Show exactly 2 things: The isolated background toy, and the background + true signal bump
+        # =========================================================
+        if channel == inj_channel:
+            sig_hist_inj, _ = np.histogram(sig_events_inj, bins=bins_ch)
+            toy_random = np.random.poisson(B_ch)
+            toy_injected = np.random.poisson(B_ch) + sig_hist_inj
             
-            if np.sum(sig_hist_xy) > 0:
-                sig_hist_xy = sig_hist_xy * ( (args.events * eff) / np.sum(sig_hist_xy) )
-                toy_copula += np.random.poisson(sig_hist_xy)
-                peak_idx = np.argmax(sig_hist_xy)
-                copula_peak_mass = centers_xy[peak_idx]
-        
-        chi2_naive = fit_and_get_chi2(toy_naive, bins_xy, params_xy, fmin_xy, fmax_xy, f"h_{channel}_naive")
-        chi2_linear = fit_and_get_chi2(toy_linear, bins_xy, params_xy, fmin_xy, fmax_xy, f"h_{channel}_linear")
-        chi2_copula = fit_and_get_chi2(toy_copula, bins_xy, params_xy, fmin_xy, fmax_xy, f"h_{channel}_copula")
+            chi2_rand = fit_and_get_chi2(toy_random, bins_ch, params_ch, fmin_ch, fmax_ch, f"h_{channel}_rand")
+            chi2_inj = fit_and_get_chi2(toy_injected, bins_ch, params_ch, fmin_ch, fmax_ch, f"h_{channel}_inj")
+            
+            ax.plot(centers_ch, B_ch, color='gray', linestyle='--', linewidth=1.5, label='Analytic Fit $H_0$')
+            
+            plot_configs = [
+                (f'Random Toy [$\chi^2$={chi2_rand:.1f}]', toy_random, 'green', 'o'),
+                (f'Injected Signal [$\chi^2$={chi2_inj:.1f}]', toy_injected, 'blue', 's')
+            ]
+            
+            for label, counts, color, marker in plot_configs:
+                if PLOT_AS_POINTS:
+                    errors = np.sqrt(counts) if SHOW_ERRORS else None
+                    ax.errorbar(centers_ch, counts, yerr=errors, fmt=marker, color=color, markersize=3, elinewidth=0.8, label=label, alpha=0.7)
+                else:
+                    ax.step(centers_ch, counts, where='mid', color=color, linewidth=1.5, label=label, alpha=0.7)
+                    
+            ax.axvline(args.mass, color='blue', linestyle=':', linewidth=2, label=f'True Inj ({args.mass})')
+            ax.set_title(f'INJECTION CHANNEL: $M_{{{channel}}}$', fontsize=14, fontweight='bold', color='navy')
 
-        ax.plot(centers_xy, B_xy, color='gray', linestyle='--', linewidth=1.5, label='Analytic Fit $H_0$')
-        
-        plot_configs = [
-            (f'Naive [$\chi^2$={chi2_naive:.1f}]', toy_naive, 'red', 'o'),
-            (f'Linear [$\chi^2$={chi2_linear:.1f}]', toy_linear, 'orange', 's'),
-            # (f'Copula [$\chi^2$={chi2_copula:.1f}]', toy_copula, 'green', 'D')
-        ]
-        
-        for label, counts, color, marker in plot_configs:
-            if PLOT_AS_POINTS:
-                errors = np.sqrt(counts) if SHOW_ERRORS else None
-                ax.errorbar(centers_xy, counts, yerr=errors, fmt=marker, color=color, markersize=3, elinewidth=0.8, label=label, alpha=0.7)
+        # =========================================================
+        # BRANCH B: ALL OTHER CHANNELS (INCLUDING M_jj IF IT WAS NOT INJECTED)
+        # Show the Migration Methods: Naive, Linear Overlap, and Copula
+        # =========================================================
+        else:
+            eff = 1.0 if channel == 'jj' else overlap_map.get(channel, 0.1)
+            
+            toy_naive = np.random.poisson(B_ch)
+            
+            # --- Linear Overlap (Propagated from the strictly forward M_jj literal assumption) ---
+            aligned_residual_linear = np.interp(centers_ch, centers_jj, residual_jj_linear)
+            ov_counts_linear = (B_ch * eff) * (1 + aligned_residual_linear)
+            ind_b = np.maximum(0, B_ch * (1 - eff))
+            ind_counts_linear = np.random.poisson(ind_b)
+            toy_linear = np.maximum(0, np.round(ov_counts_linear + ind_counts_linear).astype(int))
+            
+            # --- Copula Forward Propagation (From the properly back-propagated M_jj hub) ---
+            toy_copula = np.random.poisson(B_ch)
+            copula_peak_mass = None 
+            
+            if channel == 'jj':
+                # If we are plotting the jj hub, the copula signal is the back-propagated data
+                sig_hist_ch, _ = np.histogram(sig_events_copula_jj, bins=bins_ch)
+                if np.sum(sig_hist_ch) > 0:
+                    toy_copula += np.random.poisson(sig_hist_ch)
+                    copula_peak_mass = centers_ch[np.argmax(sig_hist_ch)]
             else:
-                ax.step(centers_xy, counts, where='mid', color=color, linewidth=1.5, label=label, alpha=0.7)
-        
-        ax.axvline(args.mass, color='blue', linestyle=':', linewidth=1.5) # Removed label to save space
-        if SHOW_COPULA_PEAK_LINE and copula_peak_mass is not None:
-            ax.axvline(copula_peak_mass, color='green', linestyle='--', linewidth=1.5, alpha=0.8)
-        
+                # If we are plotting a sub-channel, forward propagate from the back-propagated jj hub
+                idx_ch = cols.index(f"M{channel}")
+                ranks_jj = np.interp(sig_events_copula_jj, centers_jj, cdf_jj)
+                idx_closest = np.searchsorted(sorted_matrix_jj[:, idx_jj], ranks_jj)
+                idx_closest = np.clip(idx_closest, 0, len(sorted_matrix_jj)-1)
+                
+                migrated_ranks_ch = sorted_matrix_jj[idx_closest, idx_ch]
+                valid_ranks = migrated_ranks_ch[migrated_ranks_ch >= 0]
+                
+                if len(valid_ranks) > 0:
+                    migrated_masses_ch = np.interp(valid_ranks, cdf_ch, centers_ch)
+                    sig_hist_ch, _ = np.histogram(migrated_masses_ch, bins=bins_ch)
+                    
+                    if np.sum(sig_hist_ch) > 0:
+                        b_ch_local = np.interp(args.mass, centers_ch, B_ch)
+                        b_jj_local = np.interp(args.mass, centers_jj, B_jj)
+                        acceptance_ratio = b_ch_local / b_jj_local if b_jj_local > 0 else 0
+                        
+                        target_events = args.events * eff * acceptance_ratio
+                        sig_hist_ch = sig_hist_ch * (target_events / np.sum(sig_hist_ch))
+                        
+                        toy_copula += np.random.poisson(sig_hist_ch)
+                        copula_peak_mass = centers_ch[np.argmax(sig_hist_ch)]
+            
+            chi2_naive = fit_and_get_chi2(toy_naive, bins_ch, params_ch, fmin_ch, fmax_ch, f"h_{channel}_naive")
+            chi2_linear = fit_and_get_chi2(toy_linear, bins_ch, params_ch, fmin_ch, fmax_ch, f"h_{channel}_linear")
+            chi2_copula = fit_and_get_chi2(toy_copula, bins_ch, params_ch, fmin_ch, fmax_ch, f"h_{channel}_copula")
+
+            ax.plot(centers_ch, B_ch, color='gray', linestyle='--', linewidth=1.5, label='Analytic Fit $H_0$')
+            
+            plot_configs = [
+                (f'Naive [$\chi^2$={chi2_naive:.1f}]', toy_naive, 'red', 'o'),
+                (f'Linear [$\chi^2$={chi2_linear:.1f}]', toy_linear, 'orange', 's'),
+                (f'Copula [$\chi^2$={chi2_copula:.1f}]', toy_copula, 'green', 'D')
+            ]
+            
+            for label, counts, color, marker in plot_configs:
+                if PLOT_AS_POINTS:
+                    errors = np.sqrt(counts) if SHOW_ERRORS else None
+                    ax.errorbar(centers_ch, counts, yerr=errors, fmt=marker, color=color, markersize=3, elinewidth=0.8, label=label, alpha=0.7)
+                else:
+                    ax.step(centers_ch, counts, where='mid', color=color, linewidth=1.5, label=label, alpha=0.7)
+            
+            if SHOW_COPULA_PEAK_LINE and copula_peak_mass is not None:
+                ax.axvline(copula_peak_mass, color='green', linestyle='--', linewidth=1.5, alpha=0.8, label='Copula Peak')
+
+            if channel == 'jj':
+                ax.set_title(f'HUB Comparison: $M_{{jj}}$', fontsize=14, fontweight='bold', color='purple')
+            else:
+                ax.set_title(f'Shift to $M_{{{channel}}}$', fontsize=14)
+
+        # =========================================================
+        # COMMON AESTHETICS FOR ALL PANELS
+        # =========================================================
         ax.set_yscale('log')
         ax.set_xscale('log')
-        ax.set_xlim(bins_xy[0], 6500) 
+        ax.set_xlim(bins_ch[0], 6500) 
         
-        ymax = max(np.max(toy_naive), np.max(toy_copula)) + (np.max(np.sqrt(toy_copula)) if SHOW_ERRORS else 0)
-        ax.set_ylim(0.5, ymax * 50)
-        
-        ax.set_title(f'Shift to $M_{{{channel}}}$', fontsize=16)
+        if channel == inj_channel:
+            ymax = max(np.max(toy_random), np.max(toy_injected))
+        else:
+            ymax = max(np.max(toy_naive), np.max(toy_copula))
+            
+        ax.set_ylim(0.5, (ymax + np.sqrt(ymax)) * 50)
         ax.set_xlabel('Mass [GeV]', fontsize=11)
         ax.set_ylabel('Events per Bin', fontsize=11)
         ax.legend(frameon=True, fontsize=8, loc='upper right')
@@ -256,14 +315,14 @@ def main():
     # ---------------------------------------------------------
     # 4. FINALIZE AND SAVE GRID FIGURE
     # ---------------------------------------------------------
-    fig.suptitle(f'Kinematic Shift: {trigger.upper()} Trigger | {args.events} injected @ {args.mass} GeV', fontsize=18, fontweight='bold', y=0.98)
-    plt.tight_layout(rect=[0, 0, 1, 0.96]) # Leave room for suptitle
+    fig.suptitle(f'Kinematic Shift: {trigger.upper()} Trigger | {args.events} events initially injected into M_{{{inj_channel}}} @ {args.mass} GeV', fontsize=18, fontweight='bold', y=0.98)
+    plt.tight_layout(rect=[0, 0, 1, 0.96]) 
     
     results_dir = os.path.join(base_dir, "plots")
     os.makedirs(results_dir, exist_ok=True)
-    filename = os.path.join(results_dir, f"grid_spectra_{trigger}_M{int(args.mass)}.png")
+    filename = os.path.join(results_dir, f"grid_spectra_{trigger}_M{int(args.mass)}_inj_{inj_channel}.png")
     
-    plt.savefig(filename, dpi=200) # Lowered DPI slightly for a large 9-panel plot to keep file size reasonable
+    plt.savefig(filename, dpi=200) 
     plt.close()
     print(f"\nSuccess! 9-Panel grid saved to: {filename}")
 

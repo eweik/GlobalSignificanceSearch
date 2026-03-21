@@ -2,10 +2,11 @@
 # run_grid.sh - Generate a 3x3 visualization grid of copula shifts
 
 # Default parameters
-TRIGGER="t1"
+TRIGGER="t2"
 MASS=2000.0
 WIDTH=80.0
 EVENTS=5000
+INJECT="jj"
 
 # Parse command line arguments
 while [[ "$#" -gt 0 ]]; do
@@ -14,6 +15,7 @@ while [[ "$#" -gt 0 ]]; do
         --mass) MASS="$2"; shift ;;
         --width) WIDTH="$2"; shift ;;
         --events) EVENTS="$2"; shift ;;
+        --inject) INJECT="$2"; shift ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
     shift
@@ -25,6 +27,7 @@ echo "Trigger:   $TRIGGER"
 echo "Mass:      $MASS GeV"
 echo "Width:     $WIDTH GeV"
 echo "Events:    $EVENTS"
+echo "Inject Ch: $INJECT"
 echo "========================================="
 
 # Execute the new grid python script
@@ -32,6 +35,7 @@ python3 python/plot_9panel_grid.py \
     --trigger "$TRIGGER" \
     --mass "$MASS" \
     --width "$WIDTH" \
-    --events "$EVENTS"
+    --events "$EVENTS" \
+    --inject "$INJECT"
 
 echo "Done!"
