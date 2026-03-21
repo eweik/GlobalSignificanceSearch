@@ -66,7 +66,7 @@ def main():
 
     # Format the plot
     plt.title(f"Global Significance vs. Local Test Statistic ({trigger.upper()})", fontsize=14)
-    plt.xlabel(r"Observed Local Test Statistic ($t_{obs}$)", fontsize=12)
+    plt.xlabel(r"Observed BumpHunter Test Statistic ($t_{obs}$)", fontsize=12)
     plt.ylabel(r"Global Significance ($Z_{global}$)", fontsize=12)
     
     # Add reference lines for standard discovery thresholds

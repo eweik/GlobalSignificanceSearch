@@ -83,8 +83,8 @@ def main():
                  label=f"{method.capitalize()} (N={MaxEvents})", color=colors[method], lw=2)
 
     # 6. Format the Plot
-    plt.title(f"Global Significance vs. Local Significance ({trigger.upper()})", fontsize=14)
-    plt.xlabel("Observed Local Significance ($Z_{local}$)", fontsize=12)
+    plt.title(f"Analysis-Wide Global Significance vs. BumpHunter Significance ({trigger.upper()})", fontsize=14)
+    plt.xlabel("Observed BumpHunter Significance ($Z_{local}$)", fontsize=12)
     plt.ylabel("Global Significance ($Z_{global}$)", fontsize=12)
     
     # Add standard discovery thresholds

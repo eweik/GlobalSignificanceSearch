@@ -21,7 +21,7 @@ def main():
     os.makedirs("plots", exist_ok=True)
 
     print(f"\n{'='*65}")
-    print(f" EXPERIMENT-WIDE GLOBAL SIGNIFICANCE (All 7 Triggers)")
+    print(f" ANALYSIS-WIDE GLOBAL SIGNIFICANCE (All 7 Triggers)")
     print(f"{'='*65}")
 
     plt.figure(figsize=(10, 6))
@@ -68,12 +68,12 @@ def main():
         Z_global = stats.norm.isf(p_global) if p_global > 0 else np.inf
 
         print(f"\n###### RESULT: {method.upper()} ######")
-        print(f" Aligned pseudo-experiments = {min_toys}")
-        print(f" Toys with Local Z >= {target_Z} anywhere in ATLAS = {NrFound}")
+        print(f" Number of pseudo-experiments = {min_toys}")
+        print(f" Toys with Local Z >= {target_Z} = {NrFound}")
         if p_global > 0:
-            print(f" Experiment-Wide Global p-value = {p_global:.2e} (Global Z = {Z_global:.2f})")
+            print(f" Analysis-Wide Global p-value = {p_global:.2e} (Global Z = {Z_global:.2f})")
         else:
-            print(f" Experiment-Wide Global p-value = < {1/min_toys:.2e} (Need more toys)")
+            print(f" Analysis-Wide Global p-value = < {1/min_toys:.2e} (Need more toys)")
             
         # 6. Plot the Survival Curve (Global vs Local)
         z_local_sorted = np.sort(z_local_dist)[::-1]
@@ -86,9 +86,9 @@ def main():
                  label=f"{method.capitalize()} (N={min_toys})", color=colors[method], lw=2)
 
     # 7. Format the Plot
-    plt.title("Experiment-Wide Global Significance vs. BumpHunter Significance", fontsize=14)
+    plt.title("Analysis-Wide Global Significance vs. BumpHunter Significance", fontsize=14)
     plt.xlabel("Highest Observed Local Significance Across All Triggers ($Z_{BH}$)", fontsize=12)
-    plt.ylabel("Experiment-Wide Global Significance ($Z_{global}$)", fontsize=12)
+    plt.ylabel("Analysis-Wide Global Significance ($Z_{global}$)", fontsize=12)
     
     plt.axhline(3, color='grey', linestyle='--', alpha=0.7, label='3σ Global Evidence')
     plt.axhline(5, color='black', linestyle=':', alpha=0.7, label='5σ Global Discovery')
