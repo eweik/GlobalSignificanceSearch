@@ -85,21 +85,20 @@ def do_fit_and_get_bkg(toy_data, m, original_bkg, channel_info, tf1_templates, a
                         shift *= -1
                     base_tf1.SetParameter(i, orig_params[i] * shift)
 
-        # I: Integral, S: Save result, R: Range, M: Improve, 0: Do not plot, Q: Quiet
-        fit_result = h_tmp.Fit(base_tf1, "ISRM0Q")
+        # Removed the 'S' flag to prevent TFitResultPtr allocation crashes
+        # I: Integral, R: Range, M: Improve, 0: Do not plot, Q: Quiet, N: Do not store/draw
+        fit_status_ptr = h_tmp.Fit(base_tf1, "IRM0QN")
 
-        # --- SAFETY CHECK 3: The Null-Pointer ---
-        # If the fit aborted so badly that it returned nothing, skip it
-        if not fit_result.Get():
+        # In PyROOT, casting the result pointer to an int invokes the operator int(),
+        # which returns the MINUIT status code. 0 means the fit converged.
+        if int(fit_status_ptr) != 0:
             continue
 
         ndf = base_tf1.GetNDF()
         chi2ndf = base_tf1.GetChisquare() / ndf if ndf > 0 else float('inf')
 
-        # Safely check validity since we confirmed the pointer exists
-        if fit_result.IsValid() and chi2ndf < min_chi2ndf:
+        if chi2ndf < min_chi2ndf:
             min_chi2ndf = chi2ndf
-            # Save the winning parameters as a pure Python list (safe from ROOT garbage collection)
             best_params = [base_tf1.GetParameter(i) for i in range(n_params)]
 
             if chi2ndf <= args.chimax:

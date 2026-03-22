@@ -27,6 +27,10 @@ else
     EXTRA_ARGS="--fit --chimax 2.0 -b"
     echo "Mode: 5-Parameter Minuit Fit ($TARGET_SCRIPT)"
 fi
+TARGET_SCRIPT="run_toys.py"
+# Legacy script requires PyROOT batch and Minuit flags
+EXTRA_ARGS="--fit --chimax 2.0 -b"
+echo "Mode: 5-Parameter Minuit Fit ($TARGET_SCRIPT)"
 
 # Find where the target script actually ended up
 if [ -f "python/$TARGET_SCRIPT" ]; then
@@ -38,6 +42,16 @@ else
     ls -R
     exit 1
 fi
+
+# ==========================================
+# STRICT SINGLE-THREADING ENFORCEMENT
+# Prevents HTCondor from throttling the job
+# ==========================================
+export OMP_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export VECLIB_MAXIMUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
 
 # Run the python script using the dynamically detected PY_PATH and arguments
 python3 "$PY_PATH" \

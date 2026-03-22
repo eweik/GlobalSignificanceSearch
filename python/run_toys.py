@@ -80,12 +80,17 @@ def main(args):
     print(f"Generating {args.toys} {args.method} toys for {args.trigger}...")
     start_time = time.time()
     
+    # print(f"DEBUG: n_mother_exp is {n_mother_exp}")
+    # print(f"DEBUG: Copula matrix shape is {matrix.shape}")
+    # start_time = time.time()
     while len(stats) < args.toys and attempts < max_attempts:
         attempts += 1
+        # print(f"DEBUG: Starting attempt {attempts} | Successful toys: {len(stats)}", end="\r")
         max_t = 0.0
         toy_successful = True
         
         completed = len(stats)
+        # if not args.batch and completed > 0 and completed % max(1, (args.toys // 20)) == 0:
         if completed > 0 and completed % max(1, (args.toys // 20)) == 0:
             progress = int((completed / args.toys) * 100)
             sys.stdout.write(f"\rProgress: [{('=' * (progress//5)).ljust(20)}] {progress}% (Attempts: {attempts}) ")
@@ -131,7 +136,9 @@ def main(args):
 
         elif args.method == "copula":
             # Sample N rows based on the mother channel (M_jj)
+            # t0 = time.time()
             sampled = matrix[np.random.choice(len(matrix), size=np.random.poisson(n_mother_exp), replace=True)]
+            # print(f"\nDEBUG: Matrix sampling took {time.time() - t0:.2f} seconds")
 
             for m, b in bkg_expectations.items():
                 idx = col_names.index(f"M{m}")
