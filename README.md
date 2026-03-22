@@ -37,13 +37,13 @@ chmod +x run/*.sh
 ## Usage
 
 The `run/` directory contains all necessary bash scripts to execute the workflow locally or on the HTCondor cluster.
+But run code from the `GlobalSignificanceSearch` directory, not the `run` directory.
 
 ### 1. Extracting Empirical Copula
 Before generating toys using the Copula method, the rank-order matrix must be extracted from the ATLAS ROOT ntuple.
 
 ```bash
-cd run
-./run_extract_copular.sh /path/to/input/root/file /path/to/output/file/
+./run/run_extract_copular.sh /path/to/input/root/file /path/to/output/file/
 ```
 * **Process:** This parses the events and maps their percentile ranks across all invariant mass definitions, saving the output to `data/copula_t1.npz`.
 
@@ -51,53 +51,72 @@ cd run
 To calculate the global test statistic distribution and account for the Look-Elsewhere Effect (LEE) locally:
 
 ```bash
-cd run
-./run_all_toys.sh --trigger t1 --toys 100 --cms 13600.0
+./run/run_all_toys.sh --trigger t1 --toys 100 --cms 13600.0
 ```
 * **Process:** Generates local test statistic distributions using the Naive, Linear, and Copula methods.
 * **Storage:** Data is stored in the `results/` directory as `.npy` files.
 
-### 3. Signal Injection Visualization
+### 3. Visualizing Background Pseudo-Experiments (Method Comparison)
+To generate a single synchronized pseudo-experiment across all 9 mass channels and visualize how the Naive, Linear, and Copula methods physically model background fluctuations:
+
+```bash
+# Format: ./run/run_comparison_plot.sh <trigger> [--hunt]
+./run/run_comparison_plot.sh t1
+```
+* **Process:** Overlays the Poisson toys from all three methods on top of the analytic background fits. Also calculates and displays the local BumpHunter Z-score for each toy.
+* **Hunt Mode:** Append `--hunt` to continuously generate random universes until the Copula method yields a $>5\sigma$ anomaly. This is highly useful for visually diagnosing boundary effects and clumping artifacts in low-statistics triggers.
+* **Output:** Saves a 9-panel grid to `plots/method_comparison_<trigger>.png`
+
+### 4. Signal Injection Visualization
 To visually verify the physical "migration" of a Gaussian signal peak from the inclusive hub into exclusive sub-channels via the empirical copula:
 
 ```bash
-cd run
-./run_injection.sh --trigger t1 --mass 2000 --width 80 --events 5000
+./run/run_injection.sh --trigger t1 --mass 2000 --width 80 --events 5000
 ```
 * **Process:** Injects a hypothetical signal into the $M_{jj}$ distribution and maps the corresponding events into $M_{jb}$, $M_{bb}$, etc.
 * **Output:** Plots showing the source spike and the resulting migrated peaks are saved to the `results/` directory as `.png` files.
 
-### 4. HTCondor Mass Production
+To see all 9 mass channels in a panel-grid figure:
+```
+# Example: Injecting a 2000 GeV signal into the M_jj distribution
+./run/run_plot_9panel_grid.sh --trigger t1 --mass 2000 --width 80 --events 5000
+```
+
+### 5. HTCondor Mass Production
 To generate the massive toy datasets required for discovery-level significance, submit the jobs to the HTCondor cluster. The submission scripts rely on `submit_toys.sub` for the job requirements and `condor_wrapper.sh` to set up the LCG environment on the worker nodes.
 
 **To submit jobs for a single trigger:**
 ```bash
-cd run
-# Format: ./submit_all.sh <trigger> <total_toys> <toys_per_job>
-./submit_all.sh t1 100000 1000
+# Format: ./run/submit_all.sh <trigger> <total_toys> <toys_per_job>
+./run/submit_all.sh t1 100000 1000
 ```
 
 **To submit jobs for ALL triggers simultaneously:**
 ```bash
-cd run
-# Format: ./submit_all_triggers.sh <total_toys> <toys_per_job>
-./submit_all_triggers.sh 100000 1000
+# Format: ./run/submit_all_triggers.sh <total_toys> <toys_per_job>
+./run/submit_all_triggers.sh 100000 1000
 ```
 
-### 5. Merging Cluster Results
+### 6. Merging Cluster Results
 Once all HTCondor jobs have finished, merge the thousands of individual `.npy` outputs into single arrays for the final global significance calculation.
 
 ```bash
-cd run
-./merge_all.sh
+./run/merge_all.sh
 ```
 * **Process:** Scans the `results/` directory, concatenates all valid arrays, and outputs the final merged files (e.g., `final_t1_linear.npy`).
 
 
-### 6. Visualizing the Survival Curve (Global vs. Local Z)
-Once all trigger results are merged, generate the final Experiment-Wide Global Significance plot to compare the Look-Elsewhere Effect (LEE) penalty across methods.
+### 7. Visualizing the Survival Curve (Global vs. Local Z)
+Once all trigger results are merged, generate the final Trigger-Level Global Significance plot to compare the Look-Elsewhere Effect (LEE) penalty across methods.
 ```bash
-python python/local_to_global_z.py
+python python/local_to_global_z.py --trigger "t1"
+```
+* **Process** This script loads the merged `.npy` files from the input trigger, calculates the p-values, and maps them to global Z-scores using the normal survival function.
+* **Output** Generates the master "Survival Curve" plot (e.g., `plots/Local_vs_Global_{trigger}.png`), visually demonstrating how the Linear method safely recovers global significance compared to the Naive baseline.
+
+To see the Analysis-Level Global Significance plot:
+```bash
+python python/experiment_global_lee.py 
 ```
 * **Process** This script loads the merged `.npy` files across all triggers, calculates the global p-values, and maps them to global Z-scores using the normal survival function.
 * **Output** Generates the master "Survival Curve" plot (e.g., `plots/Experiment_Wide_Global_Z.png`), visually demonstrating how the Linear method safely recovers global significance compared to the Naive baseline.

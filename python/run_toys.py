@@ -130,31 +130,51 @@ def main(args):
                 max_t = max(max_t, fast_bumphunter_stat(toy, active_bkg))
 
         elif args.method == "copula":
+            # Sample N rows based on the mother channel (M_jj)
             sampled = matrix[np.random.choice(len(matrix), size=np.random.poisson(n_mother_exp), replace=True)]
-            
+
             for m, b in bkg_expectations.items():
                 idx = col_names.index(f"M{m}")
-                v = sampled[sampled[:, idx] >= 0, idx]
-                if len(v) == 0: continue
-                
-                target_n = int(len(v) * channel_scales[m])
-                if target_n < len(v): v = np.random.choice(v, size=target_n, replace=False)
-                
-                # U = np.clip(v - np.random.uniform(0, 1e-6, size=len(v)), 0, 1)
-                # Apply a Gaussian smear (e.g., sigma=0.005) to break up bootstrap duplicates
-                U = np.clip(v + np.random.normal(0, 0.0005, size=len(v)), 0, 1)
-                # U = np.clip(v + np.random.normal(0, 0.00005, size=len(v)), 0, 1)
-                toy_base = np.bincount(np.clip(np.searchsorted(cdfs[m], U), 0, len(b)-1), minlength=len(b))
-                toy = toy_base
-                
-                # UPDATED: Passing syst_envelopes[m]
+
+                # 1. Determine EXACT target yield based on analytic fit
+                expected_yield = np.sum(b)
+                target_n = np.random.poisson(expected_yield)
+
+                if target_n == 0:
+                    toy = np.zeros(len(b), dtype=int)
+                else:
+                    # 2. Extract valid correlated quantiles
+                    v_correlated = sampled[sampled[:, idx] >= 0, idx]
+                    k = len(v_correlated)
+
+                    # 3. Reconcile matrix quantiles with target yield
+                    if k >= target_n:
+                        # Downsample if matrix over-predicts
+                        U_final = np.random.choice(v_correlated, size=target_n, replace=False)
+                    else:
+                        # Pad with independent uniform noise if matrix under-predicts
+                        independent_n = target_n - k
+                        U_independent = np.random.uniform(0, 1, size=independent_n)
+                        U_final = np.concatenate([v_correlated, U_independent])
+
+                    # 4. Safe uniform dither to break up bootstrap duplicates
+                    U_final += np.random.uniform(-0.0002, 0.0002, size=target_n)
+
+                    # 5. Boundary Reflection to prevent high-mass tail pile-up
+                    U_final = np.abs(U_final)
+                    U_final = np.where(U_final >= 1.0, 1.99999 - U_final, U_final)
+
+                    # 6. Map to physical histogram
+                    toy = np.bincount(np.searchsorted(cdfs[m], U_final), minlength=len(b))
+
+                # --- Fitting and BumpHunter Evaluation ---
                 active_bkg, fit_ok = do_fit_and_get_bkg(toy, m, b, channel_info, tf1_templates, args, syst_envelopes[m])
-                if not fit_ok: 
+                if not fit_ok:
                     toy_successful = False
                     break
-                
+
                 max_t = max(max_t, fast_bumphunter_stat(toy, active_bkg))
-        
+
         if toy_successful:
             stats.append(max_t)
         else:
