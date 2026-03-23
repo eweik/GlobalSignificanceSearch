@@ -25,12 +25,9 @@ else
     TARGET_SCRIPT="run_toys.py"
     # Legacy script requires PyROOT batch and Minuit flags
     EXTRA_ARGS="--fit --chimax 2.0 -b"
+    # EXTRA_ARGS="-b"
     echo "Mode: 5-Parameter Minuit Fit ($TARGET_SCRIPT)"
 fi
-TARGET_SCRIPT="run_toys.py"
-# Legacy script requires PyROOT batch and Minuit flags
-EXTRA_ARGS="--fit --chimax 2.0 -b"
-echo "Mode: 5-Parameter Minuit Fit ($TARGET_SCRIPT)"
 
 # Find where the target script actually ended up
 if [ -f "python/$TARGET_SCRIPT" ]; then

@@ -116,7 +116,7 @@ python python/local_to_global_z.py --trigger "t1"
 
 To see the Analysis-Level Global Significance plot:
 ```bash
-python python/experiment_global_lee.py 
+python python/analysis_global_lee.py 
 ```
 * **Process** This script loads the merged `.npy` files across all triggers, calculates the global p-values, and maps them to global Z-scores using the normal survival function.
 * **Output** Generates the master "Survival Curve" plot (e.g., `plots/Experiment_Wide_Global_Z.png`), visually demonstrating how the Linear method safely recovers global significance compared to the Naive baseline.

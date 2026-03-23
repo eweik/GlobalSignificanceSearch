@@ -15,7 +15,6 @@ def setup_root_env(batch=True, fit_enabled=False):
     if fit_enabled:
         ROOT.gErrorIgnoreLevel = ROOT.kFatal 
 
-
 def create_tf1_template(name, cms, fmin, fmax, params):
     formula = (
         f"[0] * TMath::Power(1.0 - (x/{cms}), [1]) * "
@@ -40,16 +39,16 @@ def do_fit_and_get_bkg(toy_data, m, original_bkg, channel_info, tf1_templates, a
     h_name = f"h_tmp_{m}"
 
     h_tmp = ROOT.TH1D(h_name, h_name, len(edges_root)-1, edges_root)
+    # Python fully owns this memory now. We must NEVER call h_tmp.Delete()
     h_tmp.SetDirectory(0)
 
     total_events = 0
     for j, val in enumerate(toy_data):
         if val > 0:
             total_events += val
-            # Fit requires Density (Counts / Width) to remain smooth
             h_tmp.SetBinContent(j+1, val / widths[j])
 
-            # THE MATHEMATICAL FIX: Combine Statistical and Systematic Errors
+            # Combine Statistical and Systematic Errors
             stat_err = np.sqrt(val)
             syst_err = syst_env[j]
             tot_err = np.sqrt(stat_err**2 + syst_err**2)
@@ -57,13 +56,10 @@ def do_fit_and_get_bkg(toy_data, m, original_bkg, channel_info, tf1_templates, a
             h_tmp.SetBinError(j+1, tot_err / widths[j])
 
     # --- SAFETY CHECK 1: The Starved Histogram ---
-    # Avoid Minuit crashes on empty or near-empty toys
-    if total_events < 50: # You can adjust this threshold
-        h_tmp.Delete()
+    if total_events < 50: 
+        # Smooth fallback to nominal background instead of failing
         return original_bkg, False
 
-    # --- SAFETY CHECK 2: Prevent TF1.Clone() Segfaults ---
-    # Use the base TF1 directly. Do NOT use .Clone()
     base_tf1 = tf1_templates[m]
     n_params = base_tf1.GetNpar()
     orig_params = [base_tf1.GetParameter(i) for i in range(n_params)]
@@ -73,25 +69,23 @@ def do_fit_and_get_bkg(toy_data, m, original_bkg, channel_info, tf1_templates, a
     min_chi2ndf = float('inf')
 
     for attempt in range(max_fit_attempts):
-        # Reset or shift parameters for this attempt IN PLACE
         if attempt == 0:
             for i in range(n_params):
                 base_tf1.SetParameter(i, orig_params[i])
         else:
             for i in range(n_params):
                 if orig_params[i] != 0.0:
-                    shift = random.uniform(0.5, 1.5)
+                    # Tighter 10% shift to prevent function from blowing up
+                    shift = random.uniform(0.9, 1.1)
                     if i == 3 and random.random() > 0.5:
                         shift *= -1
                     base_tf1.SetParameter(i, orig_params[i] * shift)
 
-        # Removed the 'S' flag to prevent TFitResultPtr allocation crashes
-        # I: Integral, R: Range, M: Improve, 0: Do not plot, Q: Quiet, N: Do not store/draw
-        fit_status_ptr = h_tmp.Fit(base_tf1, "IRM0QN")
+        # 1. Removed 'I' flag to prevent infinite numerical integration loops
+        # 2. Removed 'S' flag and instantly cast to int to prevent PyROOT memory leaks
+        fit_status = int(h_tmp.Fit(base_tf1, "RM0QN"))
 
-        # In PyROOT, casting the result pointer to an int invokes the operator int(),
-        # which returns the MINUIT status code. 0 means the fit converged.
-        if int(fit_status_ptr) != 0:
+        if fit_status != 0:
             continue
 
         ndf = base_tf1.GetNDF()
@@ -104,9 +98,9 @@ def do_fit_and_get_bkg(toy_data, m, original_bkg, channel_info, tf1_templates, a
             if chi2ndf <= args.chimax:
                 break
 
-    # If we never found a valid fit, return the original background
+    # If we never found a valid fit, return False
     if best_params is None or min_chi2ndf > args.chimax:
-        h_tmp.Delete()
+        # Notice there is NO h_tmp.Delete() here!
         return original_bkg, False
 
     # Restore the best parameters to the base TF1 so we can evaluate it
@@ -116,5 +110,5 @@ def do_fit_and_get_bkg(toy_data, m, original_bkg, channel_info, tf1_templates, a
     centers = channel_info[m]['centers']
     active_bkg = np.clip(np.array([base_tf1.Eval(c) for c in centers]) * widths, 0.0, 1e7)
 
-    h_tmp.Delete()
+    # Notice there is NO h_tmp.Delete() here!
     return active_bkg, True

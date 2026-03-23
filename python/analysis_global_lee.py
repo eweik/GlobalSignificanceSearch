@@ -13,10 +13,10 @@ def main():
     args = parser.parse_args()
 
     target_Z = args.ExpectedLocalZvalue
-    # methods = ["naive", "linear", "copula"]
-    # colors = {"naive": "red", "linear": "blue", "copula": "green"}
-    methods = ["naive", "linear"]
-    colors = {"naive": "red", "linear": "blue"}
+    methods = ["naive", "linear", "copula"]
+    colors = {"naive": "red", "linear": "blue", "copula": "green"}
+    # methods = ["naive", "linear"]
+    # colors = {"naive": "red", "linear": "blue"}
     
     os.makedirs("plots", exist_ok=True)
 

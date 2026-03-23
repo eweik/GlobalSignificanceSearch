@@ -16,7 +16,13 @@ if os.getcwd() not in sys.path:
 from src.config import ATLAS_BINS, TRIGGER_OVERLAPS
 from src.models import FiveParam, FiveParam_alt
 from src.stats import fast_bumphunter_stat
-from src.fitting import setup_root_env, create_tf1_template, do_fit_and_get_bkg
+
+# Conditionally import fitting tools only if we need them later
+try:
+    from src.fitting import setup_root_env, create_tf1_template, do_fit_and_get_bkg
+    FITTING_AVAILABLE = True
+except ImportError:
+    FITTING_AVAILABLE = False
 
 def main(args):
     os.makedirs("results", exist_ok=True)
@@ -26,8 +32,11 @@ def main(args):
     else:
         base_dir = repo_root
 
-    if args.fit or args.batch:
-        setup_root_env(batch=args.batch, fit_enabled=args.fit)
+    # Ensure ROOT is available if the user explicitly requested fitting
+    if args.fit:
+        if not FITTING_AVAILABLE:
+            print("Error: --fit requested but ROOT/fitting.py could not be loaded."); sys.exit(1)
+        setup_root_env(batch=args.batch, fit_enabled=True)
 
     mass_types = ["jj", "bb", "jb", "je", "jm", "jg", "be", "bm", "bg"]
     bkg_expectations, syst_envelopes, channel_info, tf1_templates = {}, {}, {}, {}
@@ -54,6 +63,7 @@ def main(args):
                     syst_envelopes[m] = np.abs(counts_alt - counts_nom)
                     channel_info[m] = {'centers': c, 'bins': v_bins}
                     
+                    # Only create the heavy C++ TF1 objects if we are actually fitting
                     if args.fit:
                         name = f"back_{args.trigger}_{m}"
                         tf1_templates[m] = create_tf1_template(name, args.cms, fmin_val, fmax_val, d_nom['parameters'])
@@ -71,45 +81,56 @@ def main(args):
         
         mother_key = 'jj' if 'jj' in bkg_expectations else list(bkg_expectations.keys())[0]
         n_mother_exp = np.sum(bkg_expectations[mother_key])
-        channel_scales = {m: np.sum(b) / n_mother_exp for m, b in bkg_expectations.items()}
 
     stats = []
-    fit_failures, attempts = 0, 0
+    fit_failures = 0
+    attempts = 0
     max_attempts = args.toys * 50 
     
-    print(f"Generating {args.toys} {args.method} toys for {args.trigger}...")
+    mode_str = "WITH REFITTING" if args.fit else "NO FIT (FIXED BKG)"
+    print(f"Generating {args.toys} {args.method} toys for {args.trigger} | Mode: {mode_str}")
     start_time = time.time()
     
-    # print(f"DEBUG: n_mother_exp is {n_mother_exp}")
-    # print(f"DEBUG: Copula matrix shape is {matrix.shape}")
-    # start_time = time.time()
     while len(stats) < args.toys and attempts < max_attempts:
         attempts += 1
-        # print(f"DEBUG: Starting attempt {attempts} | Successful toys: {len(stats)}", end="\r")
         max_t = 0.0
-        toy_successful = True
+        channels_searched = 0
         
         completed = len(stats)
-        # if not args.batch and completed > 0 and completed % max(1, (args.toys // 20)) == 0:
-        if completed > 0 and completed % max(1, (args.toys // 20)) == 0:
+        if not args.batch and completed > 0 and completed % max(1, (args.toys // 20)) == 0:
             progress = int((completed / args.toys) * 100)
             sys.stdout.write(f"\rProgress: [{('=' * (progress//5)).ljust(20)}] {progress}% (Attempts: {attempts}) ")
             sys.stdout.flush()
 
+        # ==========================================================
+        # 1. NAIVE METHOD
+        # ==========================================================
         if args.method == "naive":
             for m, b in bkg_expectations.items():
-                env = syst_envelopes[m]
-                # toy = np.random.poisson(np.maximum(0, b + (np.random.normal(0, 1, size=len(b)) * env)))
                 toy = np.random.poisson(b)
                 
-                active_bkg, fit_ok = do_fit_and_get_bkg(toy, m, b, channel_info, tf1_templates, args, env)
-                if not fit_ok: 
-                    toy_successful = False
-                    break
+                # Skip starved channels safely
+                if np.sum(toy) < 50: continue
+                
+                if args.fit:
+                    active_bkg, fit_ok = do_fit_and_get_bkg(toy, m, b, channel_info, tf1_templates, args, syst_envelopes[m])
+                    if not fit_ok: 
+                        fit_failures += 1
+                        continue # Colleague's skip logic
+                else:
+                    active_bkg = b
                 
                 max_t = max(max_t, fast_bumphunter_stat(toy, active_bkg))
+                channels_searched += 1
         
+        # ==========================================================
+        # 2. LINEAR METHOD
+        # ==========================================================
         elif args.method == "linear":
+            # Ensure jj exists to build linear overlap hub
+            if 'jj' not in bkg_expectations:
+                print("Error: Missing jj channel required for linear method."); break
+                
             jj_b = bkg_expectations['jj']
             jj_pseudo = np.random.poisson(jj_b)
             jj_res_raw = np.where(jj_b > 0, (jj_pseudo - jj_b) / jj_b, 0)
@@ -121,76 +142,74 @@ def main(args):
                     ov_frac = overlap_map.get(m, 0.1)
                     mapped_res = np.interp(channel_info[m]['centers'], channel_info['jj']['centers'], jj_res_raw)
                     ov_counts = (b * ov_frac) * (1 + mapped_res)
-                    
                     ind_b = b * (1 - ov_frac)
-                    ind_counts = np.random.poisson(ind_b)
-                    toy = np.maximum(0, np.round(ov_counts + ind_counts).astype(int))
+                    toy = np.maximum(0, np.round(ov_counts + np.random.poisson(ind_b)).astype(int))
                 
-                # UPDATED: Passing syst_envelopes[m]
-                active_bkg, fit_ok = do_fit_and_get_bkg(toy, m, b, channel_info, tf1_templates, args, syst_envelopes[m])
-                if not fit_ok: 
-                    toy_successful = False
-                    break
+                if np.sum(toy) < 50: continue
+                
+                if args.fit:
+                    active_bkg, fit_ok = do_fit_and_get_bkg(toy, m, b, channel_info, tf1_templates, args, syst_envelopes[m])
+                    if not fit_ok: 
+                        fit_failures += 1
+                        continue
+                else:
+                    active_bkg = b
                 
                 max_t = max(max_t, fast_bumphunter_stat(toy, active_bkg))
+                channels_searched += 1
 
+        # ==========================================================
+        # 3. COPULA METHOD
+        # ==========================================================
         elif args.method == "copula":
-            # Sample N rows based on the mother channel (M_jj)
-            # t0 = time.time()
             sampled = matrix[np.random.choice(len(matrix), size=np.random.poisson(n_mother_exp), replace=True)]
-            # print(f"\nDEBUG: Matrix sampling took {time.time() - t0:.2f} seconds")
 
             for m, b in bkg_expectations.items():
                 idx = col_names.index(f"M{m}")
-
-                # 1. Determine EXACT target yield based on analytic fit
-                expected_yield = np.sum(b)
-                target_n = np.random.poisson(expected_yield)
+                target_n = np.random.poisson(np.sum(b))
 
                 if target_n == 0:
                     toy = np.zeros(len(b), dtype=int)
                 else:
-                    # 2. Extract valid correlated quantiles
                     v_correlated = sampled[sampled[:, idx] >= 0, idx]
                     k = len(v_correlated)
 
-                    # 3. Reconcile matrix quantiles with target yield
                     if k >= target_n:
-                        # Downsample if matrix over-predicts
                         U_final = np.random.choice(v_correlated, size=target_n, replace=False)
                     else:
-                        # Pad with independent uniform noise if matrix under-predicts
-                        independent_n = target_n - k
-                        U_independent = np.random.uniform(0, 1, size=independent_n)
+                        U_independent = np.random.uniform(0, 1, size=(target_n - k))
                         U_final = np.concatenate([v_correlated, U_independent])
 
-                    # 4. Safe uniform dither to break up bootstrap duplicates
+                    # Dither & Boundary Reflection
                     U_final += np.random.uniform(-0.0002, 0.0002, size=target_n)
-
-                    # 5. Boundary Reflection to prevent high-mass tail pile-up
-                    U_final = np.abs(U_final)
-                    U_final = np.where(U_final >= 1.0, 1.99999 - U_final, U_final)
-
-                    # 6. Map to physical histogram
+                    U_final = np.where(np.abs(U_final) >= 1.0, 1.99999 - np.abs(U_final), np.abs(U_final))
                     toy = np.bincount(np.searchsorted(cdfs[m], U_final), minlength=len(b))
 
-                # --- Fitting and BumpHunter Evaluation ---
-                active_bkg, fit_ok = do_fit_and_get_bkg(toy, m, b, channel_info, tf1_templates, args, syst_envelopes[m])
-                if not fit_ok:
-                    toy_successful = False
-                    break
+                if np.sum(toy) < 50: continue
+
+                if args.fit:
+                    active_bkg, fit_ok = do_fit_and_get_bkg(toy, m, b, channel_info, tf1_templates, args, syst_envelopes[m])
+                    if not fit_ok: 
+                        fit_failures += 1
+                        continue
+                else:
+                    active_bkg = b
 
                 max_t = max(max_t, fast_bumphunter_stat(toy, active_bkg))
+                channels_searched += 1
 
-        if toy_successful:
+        # ==========================================================
+        # TOY EVALUATION
+        # ==========================================================
+        # Only save if we successfully evaluated at least one channel
+        if channels_searched > 0:
             stats.append(max_t)
-        else:
-            fit_failures += 1
 
     sys.stdout.write(f"\rProgress: [{'=' * 20}] 100% \n")
     sys.stdout.flush()
 
-    out_file = os.path.join("results", f"global_stat_{args.trigger}_{args.method}_{args.jobid}.npy")
+    suffix = "FIT" if args.fit else "NOFIT"
+    out_file = os.path.join("results", f"global_stat_{args.trigger}_{args.method}_{args.jobid}_{suffix}.npy")
     np.save(out_file, stats)
     
     elapsed_time = time.time() - start_time
@@ -200,8 +219,8 @@ def main(args):
     print("-" * 50)
     print(f"Successfully saved {len(stats)} toys to {out_file}")
     if args.fit: 
-        print(f"Total toys thrown out completely (after 100 fit retries): {fit_failures}")
-        print(f"Overall Acceptance Rate: {(len(stats) / attempts) * 100:.2f}%")
+        print(f"Total individual channel fits failed/skipped: {fit_failures}")
+    print(f"Overall Acceptance Rate: {(len(stats) / attempts) * 100:.2f}%")
     print(f"Time Elapsed: {int(hours)}h {int(minutes)}m {seconds:.2f}s")
     print("-" * 50)
 
@@ -216,4 +235,3 @@ if __name__ == '__main__':
     p.add_argument('--chimax', type=float, default=2.0)
     p.add_argument('--jobid', type=str, default="local")
     main(p.parse_args())
-
