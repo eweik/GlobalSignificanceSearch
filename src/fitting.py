@@ -24,12 +24,17 @@ def create_tf1_template(name, cms, fmin, fmax, params):
 
     for idx, val in enumerate(params[:5]):
         back.SetParameter(idx, float(val))
+        # This locks the degrees of freedom to exactly match the JSON Null Hypothesis
         if float(val) == 0.0:
             back.FixParameter(idx, 0.0)
+        elif idx >= 2:
+            # The Straitjacket to prevent the function from numerical divergence
+            margin = abs(float(val)) * 0.50
+            back.SetParLimits(idx, float(val) - margin, float(val) + margin)
+            
     return back
 
-
-def do_fit_and_get_bkg(toy_data, m, original_bkg, channel_info, tf1_templates, args, syst_env):
+def do_fit_and_get_bkg(toy_data, m, original_bkg, channel_info, tf1_template, args, syst_env):
     if not args.fit:
         return original_bkg, True
 
@@ -39,7 +44,6 @@ def do_fit_and_get_bkg(toy_data, m, original_bkg, channel_info, tf1_templates, a
     h_name = f"h_tmp_{m}"
 
     h_tmp = ROOT.TH1D(h_name, h_name, len(edges_root)-1, edges_root)
-    # Python fully owns this memory now. We must NEVER call h_tmp.Delete()
     h_tmp.SetDirectory(0)
 
     total_events = 0
@@ -48,67 +52,54 @@ def do_fit_and_get_bkg(toy_data, m, original_bkg, channel_info, tf1_templates, a
             total_events += val
             h_tmp.SetBinContent(j+1, val / widths[j])
 
-            # Combine Statistical and Systematic Errors
             stat_err = np.sqrt(val)
             syst_err = syst_env[j]
             tot_err = np.sqrt(stat_err**2 + syst_err**2)
 
             h_tmp.SetBinError(j+1, tot_err / widths[j])
 
-    # --- SAFETY CHECK 1: The Starved Histogram ---
     if total_events < 50: 
-        # Smooth fallback to nominal background instead of failing
         return original_bkg, False
 
-    base_tf1 = tf1_templates[m]
-    n_params = base_tf1.GetNpar()
-    orig_params = [base_tf1.GetParameter(i) for i in range(n_params)]
+    n_params = tf1_template.GetNpar()
+    orig_params = [tf1_template.GetParameter(i) for i in range(n_params)]
 
-    max_fit_attempts = 100
+    best_chi2 = float('inf')
     best_params = None
-    min_chi2ndf = float('inf')
+    max_fit_attempts = 15 # Give MINUIT a few chances to find the minimum for this shape
 
     for attempt in range(max_fit_attempts):
         if attempt == 0:
             for i in range(n_params):
-                base_tf1.SetParameter(i, orig_params[i])
+                tf1_template.SetParameter(i, orig_params[i])
         else:
             for i in range(n_params):
-                if orig_params[i] != 0.0:
-                    # Tighter 10% shift to prevent function from blowing up
+                if orig_params[i] != 0.0: # Only nudge parameters that are floating
                     shift = random.uniform(0.9, 1.1)
-                    if i == 3 and random.random() > 0.5:
-                        shift *= -1
-                    base_tf1.SetParameter(i, orig_params[i] * shift)
+                    if i == 3 and random.random() > 0.5: shift *= -1
+                    tf1_template.SetParameter(i, orig_params[i] * shift)
 
-        # 1. Removed 'I' flag to prevent infinite numerical integration loops
-        # 2. Removed 'S' flag and instantly cast to int to prevent PyROOT memory leaks
-        fit_status = int(h_tmp.Fit(base_tf1, "RM0QN"))
+        # RM0QN: Range, Improve, Zero Graphics, Quiet, No Store
+        # fit_status = int(h_tmp.Fit(tf1_template, "RM0QN"))
+        fit_status = int(h_tmp.Fit(tf1_template, "IRM0QN"))
 
-        if fit_status != 0:
-            continue
+        if fit_status == 0:
+            ndf = tf1_template.GetNDF()
+            chi2ndf = tf1_template.GetChisquare() / ndf if ndf > 0 else float('inf')
+            
+            if chi2ndf < best_chi2:
+                best_chi2 = chi2ndf
+                best_params = [tf1_template.GetParameter(i) for i in range(n_params)]
+                if chi2ndf <= args.chimax:
+                    break
 
-        ndf = base_tf1.GetNDF()
-        chi2ndf = base_tf1.GetChisquare() / ndf if ndf > 0 else float('inf')
-
-        if chi2ndf < min_chi2ndf:
-            min_chi2ndf = chi2ndf
-            best_params = [base_tf1.GetParameter(i) for i in range(n_params)]
-
-            if chi2ndf <= args.chimax:
-                break
-
-    # If we never found a valid fit, return False
-    if best_params is None or min_chi2ndf > args.chimax:
-        # Notice there is NO h_tmp.Delete() here!
+    if best_params is None or best_chi2 > args.chimax:
         return original_bkg, False
 
-    # Restore the best parameters to the base TF1 so we can evaluate it
     for i in range(n_params):
-        base_tf1.SetParameter(i, best_params[i])
+        tf1_template.SetParameter(i, best_params[i])
 
     centers = channel_info[m]['centers']
-    active_bkg = np.clip(np.array([base_tf1.Eval(c) for c in centers]) * widths, 0.0, 1e7)
+    active_bkg = np.clip(np.array([tf1_template.Eval(c) for c in centers]) * widths, 0.0, 1e7)
 
-    # Notice there is NO h_tmp.Delete() here!
     return active_bkg, True

@@ -44,11 +44,12 @@ fi
 # STRICT SINGLE-THREADING ENFORCEMENT
 # Prevents HTCondor from throttling the job
 # ==========================================
-export OMP_NUM_THREADS=1
-export OPENBLAS_NUM_THREADS=1
-export MKL_NUM_THREADS=1
-export VECLIB_MAXIMUM_THREADS=1
-export NUMEXPR_NUM_THREADS=1
+# export OMP_NUM_THREADS=1
+# export OPENBLAS_NUM_THREADS=1
+# export MKL_NUM_THREADS=1
+# export VECLIB_MAXIMUM_THREADS=1
+# export NUMEXPR_NUM_THREADS=1
+mkdir -p run/logs results
 
 # Run the python script using the dynamically detected PY_PATH and arguments
 python3 "$PY_PATH" \

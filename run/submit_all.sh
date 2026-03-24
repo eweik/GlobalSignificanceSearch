@@ -1,9 +1,9 @@
 #!/bin/bash
 
 # Default values if no arguments are provided
-TRIGGER=${1:-"t1"}
-TOTAL_TOYS=${2:-100000}
-TOYS_PER_JOB=${3:-1000}
+TRIGGER=${1:-"t2"}
+TOTAL_TOYS=${2:-30}
+TOYS_PER_JOB=${3:-10}
 
 # Calculate how many jobs are needed per method
 N_JOBS=$((TOTAL_TOYS / TOYS_PER_JOB))
@@ -21,8 +21,8 @@ echo " Jobs per Method:  $N_JOBS"
 echo "================================================="
 
 # Loop through all three methods and submit them
-# for METHOD in naive linear copula; do
-for METHOD in copula; do
+for METHOD in naive linear copula; do
+# for METHOD in copula; do
     echo "Submitting $METHOD..."
     condor_submit run/submit_toys.sub \
         trigger=$TRIGGER \
