@@ -15,8 +15,8 @@ def main():
     target_Z = args.ExpectedLocalZvalue
     methods = ["naive", "linear", "copula"]
     colors = {"naive": "red", "linear": "blue", "copula": "green"}
-    # methods = ["naive", "linear"]
-    # colors = {"naive": "red", "linear": "blue"}
+    methods = ["naive", "linear"]
+    colors = {"naive": "red", "linear": "blue"}
     
     os.makedirs("plots", exist_ok=True)
 
@@ -32,9 +32,10 @@ def main():
         # 1. Load data for all 7 triggers
         for t in range(1, 8):
             trigger = f"t{t}"
-            file_list = glob.glob(f"results/global_stat_{trigger}_{method}_*.npy")
+            # file_list = glob.glob(f"results/global_stat_{trigger}_{method}_*.npy")
+            file_list = None
             if not file_list:
-                file_list = glob.glob(f"results/merged/final_{trigger}_{method}.npy")
+                file_list = glob.glob(f"results/merged_nofit/final_{trigger}_{method}.npy")
                 
             if not file_list:
                 print(f"[{method.upper()}] Missing data for {trigger}. Cannot compute experiment-wide.")

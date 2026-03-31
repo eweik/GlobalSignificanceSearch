@@ -107,16 +107,43 @@ def main(args):
             if 'jj' not in bkg_expectations: break
             jj_b = bkg_expectations['jj']
             jj_pseudo = np.random.poisson(jj_b)
-            jj_res_raw = np.where(jj_b > 0, (jj_pseudo - jj_b) / jj_b, 0)
+            jj_centers = channel_info['jj']['centers']
             
             for m, b in bkg_expectations.items():
-                if m == 'jj': toy = jj_pseudo
+                if m == 'jj': 
+                    toy = jj_pseudo
                 else:
                     ov_frac = overlap_map.get(m, 0.1)
-                    mapped_res = np.interp(channel_info[m]['centers'], channel_info['jj']['centers'], jj_res_raw)
-                    ov_counts = (b * ov_frac) * (1 + mapped_res)
-                    ind_b = b * (1 - ov_frac)
-                    toy = np.maximum(0, np.round(ov_counts + np.random.poisson(ind_b)).astype(int))
+                    m_centers = channel_info[m]['centers']
+                    
+                    # 1. Exact Bin Alignment (Replaces dangerous np.interp)
+                    jj_b_aligned = np.zeros(len(b))
+                    jj_pseudo_int = np.zeros(len(b), dtype=int)
+                    
+                    for i, mc in enumerate(m_centers):
+                        # Find the physically matching bin in the jj master array
+                        dist = np.abs(jj_centers - mc)
+                        min_idx = np.argmin(dist)
+                        if dist[min_idx] < 1.0: # If centers match within 1 GeV
+                            jj_b_aligned[i] = jj_b[min_idx]
+                            jj_pseudo_int[i] = jj_pseudo[min_idx]
+                    
+                    # 2. Bivariate Poisson math (Safe against analytic fit crossing)
+                    # The shared expectation cannot physically exceed the inclusive jj expectation
+                    lambda_shared = np.minimum(b * ov_frac, jj_b_aligned)
+                    
+                    # Calculate strict transfer probability (Guaranteed between 0 and 1)
+                    p_transfer = np.clip(lambda_shared / np.maximum(jj_b_aligned, 1e-15), 0.0, 1.0)
+                    
+                    # 3. Safely draw overlapping events using strict Binomial math
+                    ov_counts = np.random.binomial(jj_pseudo_int, p_transfer)
+                    
+                    # 4. Draw independent events to PERFECTLY restore the target sub-channel mean (b)
+                    ind_b = np.maximum(0, b - lambda_shared)
+                    ind_counts = np.random.poisson(ind_b)
+                    
+                    # Total channel toy is exact integer math with zero smearing
+                    toy = ov_counts + ind_counts
                 
                 if np.sum(toy) < 50: continue
                 

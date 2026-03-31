@@ -26,8 +26,8 @@ for TRIGGER in t1 t2 t3 t4 t5 t6 t7; do
     echo ">>> Queuing Trigger: $TRIGGER"
     
     # Loop over all 3 methods
-    for METHOD in naive linear copula; do
-    # for METHOD in copula; do
+    # for METHOD in naive linear copula; do
+    for METHOD in linear; do
         condor_submit run/submit_toys.sub \
             trigger=$TRIGGER \
             method=$METHOD \
