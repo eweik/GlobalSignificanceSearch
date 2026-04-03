@@ -57,13 +57,13 @@ def main(args):
                     
                     if args.fit:
                         name = f"back_{args.trigger}_{m}"
-                        # The JSON constraints are permanently locked here
                         tf1_templates[m] = create_tf1_template(name, args.cms, fmin_val, fmax_val, d_nom['parameters'])
         except Exception: continue
 
     if not bkg_expectations:
         print(f"Error: No background fits found in {os.path.join(base_dir, 'fits')}"); sys.exit(1)
 
+    # --- DATA LOADING & PREPARATION ---
     if args.method == "copula":
         copula_path = os.path.join(base_dir, "data", f"copula_{args.trigger}.npz")
         f = np.load(copula_path)
@@ -72,6 +72,20 @@ def main(args):
         mother_key = 'jj' if 'jj' in bkg_expectations else list(bkg_expectations.keys())[0]
         n_mother_exp = np.sum(bkg_expectations[mother_key])
 
+    elif args.method in ["poisson_event", "exclusive_categories"]:
+        mass_path = os.path.join(base_dir, "data", f"masses_{args.trigger}.npz")
+        f = np.load(mass_path)
+        mass_matrix, col_names = f['masses'], list(f['columns'])
+        N_events = len(mass_matrix)
+
+        if args.method == "exclusive_categories":
+            # Map events to orthogonal 9-bit categories
+            valid_mask = mass_matrix > 0
+            powers = 2 ** np.arange(len(col_names))
+            event_patterns = valid_mask.dot(powers)
+            unique_patterns = np.unique(event_patterns)
+            pattern_indices = {p: np.where(event_patterns == p)[0] for p in unique_patterns}
+
     stats = []
     fit_failures, attempts = 0, 0
     max_attempts = args.toys * 50 
@@ -79,6 +93,7 @@ def main(args):
     mode_str = "FIXED-DOF REFIT" if args.fit else "NO FIT (FROZEN BKG)"
     print(f"Generating {args.toys} {args.method} toys for {args.trigger} | Mode: {mode_str}")
     start_time = time.time()
+
     
     while len(stats) < args.toys and attempts < max_attempts:
         attempts += 1
@@ -90,6 +105,9 @@ def main(args):
             sys.stdout.write(f"\rProgress: [{('=' * (progress//5)).ljust(20)}] {progress}% (Attempts: {attempts}) ")
             sys.stdout.flush()
 
+        # ---------------------------------------------------------
+        # TOY GENERATION LOGIC
+        # ---------------------------------------------------------
         if args.method == "naive":
             for m, b in bkg_expectations.items():
                 toy = np.random.poisson(b)
@@ -98,60 +116,58 @@ def main(args):
                 if args.fit:
                     active_bkg, fit_ok = do_fit_and_get_bkg(toy, m, b, channel_info, tf1_templates[m], args, syst_envelopes[m])
                     if not fit_ok: fit_failures += 1; continue 
-                else: active_bkg = b
+                else: 
+                    active_bkg = b
                 
                 max_t = max(max_t, fast_bumphunter_stat(toy, active_bkg))
                 channels_searched += 1
         
         elif args.method == "linear":
-            if 'jj' not in bkg_expectations: break
             jj_b = bkg_expectations['jj']
             jj_pseudo = np.random.poisson(jj_b)
             jj_centers = channel_info['jj']['centers']
-            
+
             for m, b in bkg_expectations.items():
-                if m == 'jj': 
+                if m == 'jj':
                     toy = jj_pseudo
                 else:
                     ov_frac = overlap_map.get(m, 0.1)
                     m_centers = channel_info[m]['centers']
-                    
-                    # 1. Exact Bin Alignment (Replaces dangerous np.interp)
+
+                    # 1. Exact Bin Alignment
                     jj_b_aligned = np.zeros(len(b))
                     jj_pseudo_int = np.zeros(len(b), dtype=int)
-                    
+
                     for i, mc in enumerate(m_centers):
-                        # Find the physically matching bin in the jj master array
                         dist = np.abs(jj_centers - mc)
                         min_idx = np.argmin(dist)
-                        if dist[min_idx] < 1.0: # If centers match within 1 GeV
+                        if dist[min_idx] < 1.0:
                             jj_b_aligned[i] = jj_b[min_idx]
                             jj_pseudo_int[i] = jj_pseudo[min_idx]
-                    
+
                     # 2. Bivariate Poisson math (Safe against analytic fit crossing)
                     # The shared expectation cannot physically exceed the inclusive jj expectation
                     lambda_shared = np.minimum(b * ov_frac, jj_b_aligned)
-                    
+
                     # Calculate strict transfer probability (Guaranteed between 0 and 1)
-                    p_transfer = np.clip(lambda_shared / np.maximum(jj_b_aligned, 1e-15), 0.0, 1.0)
-                    
-                    # 3. Safely draw overlapping events using strict Binomial math
+                    p_transfer = lambda_shared / np.maximum(jj_b_aligned, 1e-15)
+
+                    # 3. Draw correlated events
                     ov_counts = np.random.binomial(jj_pseudo_int, p_transfer)
-                    
+
                     # 4. Draw independent events to PERFECTLY restore the target sub-channel mean (b)
                     ind_b = np.maximum(0, b - lambda_shared)
                     ind_counts = np.random.poisson(ind_b)
-                    
-                    # Total channel toy is exact integer math with zero smearing
+
+                    # Total channel toy is exact integer math with a guaranteed mean of 'b'
                     toy = ov_counts + ind_counts
-                
+
                 if np.sum(toy) < 50: continue
-                
                 if args.fit:
                     active_bkg, fit_ok = do_fit_and_get_bkg(toy, m, b, channel_info, tf1_templates[m], args, syst_envelopes[m])
                     if not fit_ok: fit_failures += 1; continue
-                else: active_bkg = b
-                
+                else: 
+                    active_bkg = b
                 max_t = max(max_t, fast_bumphunter_stat(toy, active_bkg))
                 channels_searched += 1
 
@@ -177,11 +193,55 @@ def main(args):
                 if args.fit:
                     active_bkg, fit_ok = do_fit_and_get_bkg(toy, m, b, channel_info, tf1_templates[m], args, syst_envelopes[m])
                     if not fit_ok: fit_failures += 1; continue
-                else: active_bkg = b
+                else: 
+                    active_bkg = b
 
                 max_t = max(max_t, fast_bumphunter_stat(toy, active_bkg))
                 channels_searched += 1
 
+        elif args.method in ["poisson_event", "exclusive_categories"]:
+            if args.method == "poisson_event":
+                # Approach 1: Draw X ~ Poisson(N) globally
+                N_draw = np.random.poisson(N_events)
+                sampled_rows = mass_matrix[np.random.choice(N_events, size=N_draw, replace=True)]
+            else:
+                # Approach 2: Draw n_toy_c ~ Poisson(n_c) for each orthogonal 9-bit pattern
+                sampled_rows_list = []
+                for p, indices in pattern_indices.items():
+                    n_obs = len(indices)
+                    n_toy = np.random.poisson(n_obs)
+                    if n_toy > 0:
+                        sampled_rows_list.append(mass_matrix[np.random.choice(indices, size=n_toy, replace=True)])
+                
+                if len(sampled_rows_list) > 0:
+                    sampled_rows = np.concatenate(sampled_rows_list, axis=0)
+                else:
+                    sampled_rows = np.empty((0, len(col_names)))
+
+            # Reconstruct the binned spectra from the sampled physical events
+            for m, b in bkg_expectations.items():
+                idx = col_names.index(f"M{m}")
+                masses = sampled_rows[:, idx]
+                valid_masses = masses[masses > 0]
+                physical_masses = valid_masses * args.cms
+
+                toy, _ = np.histogram(physical_masses, bins=channel_info[m]['bins'])
+                
+                if np.sum(toy) < 50: continue
+
+                if args.fit:
+                    active_bkg, fit_ok = do_fit_and_get_bkg(toy, m, b, channel_info, tf1_templates[m], args, syst_envelopes[m])
+                    if not fit_ok: fit_failures += 1; continue
+                else: 
+                    # CRITICAL NORMALIZATION FIX: Scale frozen background to fluctuating toy integral
+                    # active_bkg = b * (np.sum(toy) / np.sum(b))
+                    active_bkg = b 
+
+                max_t = max(max_t, fast_bumphunter_stat(toy, active_bkg))
+                channels_searched += 1
+
+        # ---------------------------------------------------------
+        
         if channels_searched > 0: stats.append(max_t)
 
     sys.stdout.write(f"\rProgress: [{'=' * 20}] 100% \n")
@@ -206,7 +266,7 @@ if __name__ == '__main__':
     p = ArgumentParser()
     p.add_argument('--trigger', required=True)
     p.add_argument('--toys', type=int, default=1000)
-    p.add_argument('--method', choices=["naive", "copula", "linear"], required=True)
+    p.add_argument('--method', choices=["naive", "copula", "linear", "poisson_event", "exclusive_categories"], required=True)
     p.add_argument('--cms', type=float, default=13000.)
     p.add_argument('-b', '--batch', action='store_true')
     p.add_argument('--fit', action='store_true')

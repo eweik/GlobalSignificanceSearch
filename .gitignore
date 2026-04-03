@@ -5,6 +5,7 @@ __pycache__/
 # Ignore large physics data formats
 *.root
 *.npy
+*.npz
 *.h5
 *.csv
 

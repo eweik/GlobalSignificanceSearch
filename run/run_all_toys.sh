@@ -3,8 +3,8 @@
 set -e
 
 # Default variables
-TRIGGER=${1:-"t1"}      # First argument is the trigger, defaults to "t1"
-TOYS=${2:-100000}       # Second argument is number of toys, defaults to 100000
+TRIGGER=${1:-"t2"}      # First argument is the trigger, defaults to "t1"
+TOYS=${2:-100}       # Second argument is number of toys, defaults to 100000
 USE_GP=${3:-"default"}  # Third argument switches to GP mode
 
 echo "======================================================"
@@ -18,13 +18,15 @@ if [ "$USE_GP" == "gp-toy" ]; then
 else
     TARGET_SCRIPT="python/run_toys.py"
     CHIMAX=2.0
-    EXTRA_ARGS="--fit --chimax $CHIMAX -b"
+    # EXTRA_ARGS="--fit --chimax $CHIMAX -b"
     echo " Background Model: 5-Parameter Minuit Fit"
 fi
 echo "======================================================"
 
 # Loop through all 3 methods
-for METHOD in naive linear copula; do
+# for METHOD in poisson_event exclusive_categories; do
+# for METHOD in naive linear copula poisson_event exclusive_categories; do
+for METHOD in linear; do
     echo ""
     echo ">>> Running method: $METHOD"
 

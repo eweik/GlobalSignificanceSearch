@@ -17,6 +17,8 @@ def main():
     colors = {"naive": "red", "linear": "blue", "copula": "green"}
     methods = ["naive", "linear"]
     colors = {"naive": "red", "linear": "blue"}
+    methods = ["naive", "linear", "poisson_event", "exclusive_categories"]
+    colors = {"naive": "red", "linear": "blue", "poisson_event": "green", "exclusive_categories": "purple"}
     
     os.makedirs("plots", exist_ok=True)
 
@@ -35,7 +37,7 @@ def main():
             # file_list = glob.glob(f"results/global_stat_{trigger}_{method}_*.npy")
             file_list = None
             if not file_list:
-                file_list = glob.glob(f"results/merged_nofit/final_{trigger}_{method}.npy")
+                file_list = glob.glob(f"results/merged/final_{trigger}_{method}.npy")
                 
             if not file_list:
                 print(f"[{method.upper()}] Missing data for {trigger}. Cannot compute experiment-wide.")

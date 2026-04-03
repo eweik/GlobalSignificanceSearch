@@ -17,8 +17,8 @@ def main():
     ExpectedLocalZvalue = args.ExpectedLocalZvalue
     trigger = args.trigger
 
-    methods = ["naive", "linear", "copula"]
-    colors = {"naive": "red", "linear": "blue", "copula": "green"}
+    methods = ["naive", "linear", "poisson_event", "exclusive_categories"]
+    colors = {"naive": "red", "linear": "blue", "poisson_event": "green", "exclusive_categories": "purple"}
 
     os.makedirs("plots", exist_ok=True)
 
