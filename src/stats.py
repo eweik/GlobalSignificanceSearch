@@ -17,6 +17,7 @@ def fast_bumphunter_stat(data_hist, bkg_hist, max_width=30):
     b_crop = bkg_hist[h_inf:h_sup]
 
     max_t = 0.0
+    # for w in range(1, 2):
     for w in range(2, max_width + 1):
         k = np.ones(w)
         D = np.convolve(d_crop, k, mode='valid')

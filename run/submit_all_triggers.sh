@@ -28,7 +28,7 @@ for TRIGGER in t1 t2 t3 t4 t5 t6 t7; do
     # Loop over all 5 methods
     # for METHOD in naive linear copula; do
     # for METHOD in naive linear copula poisson_event exclusive_categories; do
-    for METHOD in linear; do
+    for METHOD in copula; do
         condor_submit run/submit_toys.sub \
             trigger=$TRIGGER \
             method=$METHOD \

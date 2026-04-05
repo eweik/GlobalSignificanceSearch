@@ -47,8 +47,8 @@ def main(args):
                 c = (v_bins[:-1] + v_bins[1:]) / 2
                 widths = np.diff(v_bins)
                 
-                counts_nom = FiveParam(args.cms, c, *d_nom['parameters']) * widths
-                counts_alt = FiveParam_alt(args.cms, c, *d_alt['parameters']) * widths
+                counts_nom = FiveParam(args.cms, c, *d_nom['parameters']) 
+                counts_alt = FiveParam_alt(args.cms, c, *d_alt['parameters']) 
                 
                 if np.sum(counts_nom) > 0:
                     bkg_expectations[m] = counts_nom
@@ -70,7 +70,8 @@ def main(args):
         matrix, col_names = f['copula'], list(f['columns'])
         cdfs = {m: np.cumsum(b) / np.sum(b) for m, b in bkg_expectations.items()}
         mother_key = 'jj' if 'jj' in bkg_expectations else list(bkg_expectations.keys())[0]
-        n_mother_exp = np.sum(bkg_expectations[mother_key])
+        # Use the expected inclusive yield as N_events to sample from
+        N_events = np.sum(bkg_expectations[mother_key])
 
     elif args.method in ["poisson_event", "exclusive_categories"]:
         mass_path = os.path.join(base_dir, "data", f"masses_{args.trigger}.npz")
@@ -145,21 +146,17 @@ def main(args):
                             jj_b_aligned[i] = jj_b[min_idx]
                             jj_pseudo_int[i] = jj_pseudo[min_idx]
 
-                    # 2. Bivariate Poisson math (Safe against analytic fit crossing)
-                    # The shared expectation cannot physically exceed the inclusive jj expectation
+                    # 2. Bivariate Poisson math
                     lambda_shared = np.minimum(b * ov_frac, jj_b_aligned)
-
-                    # Calculate strict transfer probability (Guaranteed between 0 and 1)
                     p_transfer = lambda_shared / np.maximum(jj_b_aligned, 1e-15)
 
                     # 3. Draw correlated events
                     ov_counts = np.random.binomial(jj_pseudo_int, p_transfer)
 
-                    # 4. Draw independent events to PERFECTLY restore the target sub-channel mean (b)
+                    # 4. Draw independent events to PERFECTLY restore target sub-channel mean
                     ind_b = np.maximum(0, b - lambda_shared)
                     ind_counts = np.random.poisson(ind_b)
 
-                    # Total channel toy is exact integer math with a guaranteed mean of 'b'
                     toy = ov_counts + ind_counts
 
                 if np.sum(toy) < 50: continue
@@ -172,20 +169,27 @@ def main(args):
                 channels_searched += 1
 
         elif args.method == "copula":
-            sampled = matrix[np.random.choice(len(matrix), size=np.random.poisson(n_mother_exp), replace=True)]
+            # 1. Sample N times globally for this toy
+            N_draw = np.random.poisson(N_events)
+            sampled_rows = matrix[np.random.choice(len(matrix), size=N_draw, replace=True)]
+            
             for m, b in bkg_expectations.items():
                 idx = col_names.index(f"M{m}")
-                target_n = np.random.poisson(np.sum(b))
-                if target_n == 0: toy = np.zeros(len(b), dtype=int)
+                
+                # 2. Extract valid values for this specific sub-channel
+                v_correlated = sampled_rows[sampled_rows[:, idx] >= 0, idx]
+                
+                if len(v_correlated) == 0:
+                    toy = np.zeros(len(b), dtype=int)
                 else:
-                    v_correlated = sampled[sampled[:, idx] >= 0, idx]
-                    k = len(v_correlated)
-                    if k >= target_n: U_final = np.random.choice(v_correlated, size=target_n, replace=False)
-                    else:
-                        U_independent = np.random.uniform(0, 1, size=(target_n - k))
-                        U_final = np.concatenate([v_correlated, U_independent])
-                    U_final += np.random.uniform(-0.0002, 0.0002, size=target_n)
-                    U_final = np.where(np.abs(U_final) >= 1.0, 1.99999 - np.abs(U_final), np.abs(U_final))
+                    # Smear slightly to prevent binning artifacts inherited from the copula extraction
+                    U_final = v_correlated + np.random.uniform(-0.0002, 0.0002, size=len(v_correlated))
+                    
+                    # Reflect boundaries to strictly bound within [0, 1)
+                    U_final = np.where(U_final < 0.0, np.abs(U_final), U_final)
+                    U_final = np.where(U_final >= 1.0, 1.99999 - U_final, U_final)
+                    
+                    # 3. Invert back into un-binned target distribution via CDF
                     toy = np.bincount(np.searchsorted(cdfs[m], U_final), minlength=len(b))
 
                 if np.sum(toy) < 50: continue
@@ -201,11 +205,9 @@ def main(args):
 
         elif args.method in ["poisson_event", "exclusive_categories"]:
             if args.method == "poisson_event":
-                # Approach 1: Draw X ~ Poisson(N) globally
                 N_draw = np.random.poisson(N_events)
                 sampled_rows = mass_matrix[np.random.choice(N_events, size=N_draw, replace=True)]
             else:
-                # Approach 2: Draw n_toy_c ~ Poisson(n_c) for each orthogonal 9-bit pattern
                 sampled_rows_list = []
                 for p, indices in pattern_indices.items():
                     n_obs = len(indices)
@@ -218,7 +220,6 @@ def main(args):
                 else:
                     sampled_rows = np.empty((0, len(col_names)))
 
-            # Reconstruct the binned spectra from the sampled physical events
             for m, b in bkg_expectations.items():
                 idx = col_names.index(f"M{m}")
                 masses = sampled_rows[:, idx]
@@ -233,8 +234,6 @@ def main(args):
                     active_bkg, fit_ok = do_fit_and_get_bkg(toy, m, b, channel_info, tf1_templates[m], args, syst_envelopes[m])
                     if not fit_ok: fit_failures += 1; continue
                 else: 
-                    # CRITICAL NORMALIZATION FIX: Scale frozen background to fluctuating toy integral
-                    # active_bkg = b * (np.sum(toy) / np.sum(b))
                     active_bkg = b 
 
                 max_t = max(max_t, fast_bumphunter_stat(toy, active_bkg))
