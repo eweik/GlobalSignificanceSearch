@@ -73,7 +73,7 @@ def main(args):
         # Use the expected inclusive yield as N_events to sample from
         N_events = np.sum(bkg_expectations[mother_key])
 
-    elif args.method in ["poisson_event", "exclusive_categories"]:
+    elif args.method in ["poisson_event", "exclusive_categories", "decorrelated_bootstrap"]:
         mass_path = os.path.join(base_dir, "data", f"masses_{args.trigger}.npz")
         f = np.load(mass_path)
         mass_matrix, col_names = f['masses'], list(f['columns'])
@@ -239,6 +239,36 @@ def main(args):
                 max_t = max(max_t, fast_bumphunter_stat(toy, active_bkg))
                 channels_searched += 1
 
+        elif args.method == "decorrelated_bootstrap":
+            # 1. Break the correlation by independently shuffling each channel's column
+            # We do this once per toy to ensure a fresh random permutation
+            shuffled_matrix = np.copy(mass_matrix)
+            for col_idx in range(shuffled_matrix.shape[1]):
+                np.random.shuffle(shuffled_matrix[:, col_idx])
+
+            # 2. Perform the standard Poisson bootstrap on the now-independent columns
+            N_draw = np.random.poisson(N_events)
+            sampled_rows = shuffled_matrix[np.random.choice(N_events, size=N_draw, replace=True)]
+
+            for m, b in bkg_expectations.items():
+                idx = col_names.index(f"M{m}")
+                masses = sampled_rows[:, idx]
+                valid_masses = masses[masses > 0]
+                physical_masses = valid_masses * args.cms
+
+                toy, _ = np.histogram(physical_masses, bins=channel_info[m]['bins'])
+
+                if np.sum(toy) < 50: continue
+
+                if args.fit:
+                    active_bkg, fit_ok = do_fit_and_get_bkg(toy, m, b, channel_info, tf1_templates[m], args, syst_envelopes[m])
+                    if not fit_ok: fit_failures += 1; continue
+                else:
+                    active_bkg = b
+
+                max_t = max(max_t, fast_bumphunter_stat(toy, active_bkg))
+                channels_searched += 1
+
         # ---------------------------------------------------------
         
         if channels_searched > 0: stats.append(max_t)
@@ -265,7 +295,7 @@ if __name__ == '__main__':
     p = ArgumentParser()
     p.add_argument('--trigger', required=True)
     p.add_argument('--toys', type=int, default=1000)
-    p.add_argument('--method', choices=["naive", "copula", "linear", "poisson_event", "exclusive_categories"], required=True)
+    p.add_argument('--method', choices=["naive", "copula", "linear", "poisson_event", "exclusive_categories", "decorrelated_bootstrap"], required=True)
     p.add_argument('--cms', type=float, default=13000.)
     p.add_argument('-b', '--batch', action='store_true')
     p.add_argument('--fit', action='store_true')
