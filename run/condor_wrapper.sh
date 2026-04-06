@@ -24,7 +24,6 @@ if [ "$USE_GP" == "gp-toy" ]; then
 else
     TARGET_SCRIPT="run_toys.py"
     # Legacy script requires PyROOT batch and Minuit flags
-    # EXTRA_ARGS="--fit --chimax 2.0 -b"
     EXTRA_ARGS="-b"
     echo "Mode: 5-Parameter Minuit Fit ($TARGET_SCRIPT)"
 fi

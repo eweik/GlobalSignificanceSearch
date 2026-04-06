@@ -18,8 +18,7 @@ if [ "$USE_GP" == "gp-toy" ]; then
 else
     TARGET_SCRIPT="python/run_toys.py"
     CHIMAX=2.0
-    # EXTRA_ARGS="--fit --chimax $CHIMAX -b"
-    echo " Background Model: 5-Parameter Minuit Fit"
+    echo " Background Model: 5-Parameter Background Model"
 fi
 echo "======================================================"
 
