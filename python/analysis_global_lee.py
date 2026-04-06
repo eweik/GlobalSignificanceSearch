@@ -16,6 +16,7 @@ def main():
     methods = ["naive", "linear", "copula"]
     colors = {"naive": "red", "linear": "blue"}
     methods = ["naive", "copula", "poisson_event", "decorrelated_bootstrap"]
+    # methods = ["naive", "poisson_event"]
     # colors = {"naive": "red", "copula": "green", "poisson_event": "blue", "decorrelated_bootstrap": "olive"}
     colors = {"naive": "red", "linear": "blue", "copula": "orange",
               "poisson_event": "green", "exclusive_categories": "purple",
@@ -94,7 +95,8 @@ def main():
                  label=f"{method_label} (N={min_toys})", color=colors[method], lw=2)
 
     # 7. Format the Plot
-    plt.title("Analysis-Wide Global Significance vs. BumpHunter Significance | 5-param Background", fontsize=14)
+    # plt.title("Analysis-Wide Global Significance vs. BumpHunter Significance | 5-param Background", fontsize=14)
+    plt.title("Analysis-Wide Global Significance vs. BumpHunter Significance | Bin-count Background", fontsize=14)
     plt.xlabel("Highest Observed Local Significance Across All Triggers ($Z_{BH}$)", fontsize=12)
     plt.ylabel("Analysis-Wide Global Significance ($Z_{global}$)", fontsize=12)
     
@@ -108,7 +110,7 @@ def main():
     plt.grid(True, which="both", linestyle="--", alpha=0.5)
     plt.tight_layout()
     
-    plot_out = "plots/Analysis_Wide_Global_Z_5param.png"
+    plot_out = "plots/Analysis_Wide_Global_Z_bincount.png"
     plt.savefig(plot_out, dpi=300)
     print(f"\n{'-'*65}\nMaster plot saved to {plot_out}\n")
 

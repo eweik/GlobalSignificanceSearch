@@ -257,5 +257,5 @@ if __name__ == '__main__':
     p.add_argument('-b', '--batch', action='store_true')
     p.add_argument('--chimax', type=float, default=2.0)
     p.add_argument('--jobid', type=str, default="local")
-    p.add_argument('--bkg', choices=['func', 'matrix'], default='func', help="Choose to use 5-param function or nominal bin counts from mass matrices")
+    p.add_argument('--bkg', choices=['func', 'matrix'], default='matrix', help="Choose to use 5-param function or nominal bin counts from mass matrices")
     main(p.parse_args())

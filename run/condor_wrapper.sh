@@ -3,7 +3,6 @@ TRIGGER=$1
 METHOD=$2
 TOYS=$3
 JOBID=$4
-USE_GP=$5
 
 echo "Starting job $JOBID on $(hostname)"
 
@@ -15,18 +14,9 @@ if [ -n "$_CONDOR_SCRATCH_DIR" ]; then
     cd "$_CONDOR_SCRATCH_DIR" || exit 1
 fi
 
-# Determine which script to run and which arguments to pass
-if [ "$USE_GP" == "gp-toy" ]; then
-    TARGET_SCRIPT="run_toys_gp.py"
-    # GP script does not use PyROOT or Minuit flags
-    EXTRA_ARGS=""
-    echo "Mode: Gaussian Process Background ($TARGET_SCRIPT)"
-else
-    TARGET_SCRIPT="run_toys.py"
-    # Legacy script requires PyROOT batch and Minuit flags
-    EXTRA_ARGS="-b"
-    echo "Mode: 5-Parameter Minuit Fit ($TARGET_SCRIPT)"
-fi
+TARGET_SCRIPT="run_toys.py"
+EXTRA_ARGS="-b"
+echo "Mode: 5-Parameter Minuit Fit ($TARGET_SCRIPT)"
 
 # Find where the target script actually ended up
 if [ -f "python/$TARGET_SCRIPT" ]; then
