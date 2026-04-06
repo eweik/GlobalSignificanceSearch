@@ -10,7 +10,7 @@ def main():
     parser = argparse.ArgumentParser(description="Map Local Z to Global Z.")
     parser.add_argument("--ExpectedLocalZvalue", type=float, default=5.0,
                         help="Expected local significance (default: 5.0)")
-    parser.add_argument("--trigger", type=str, default="t1",
+    parser.add_argument("--trigger", type=str, default="t2",
                         help="Trigger to analyze (default: t1)")
     args = parser.parse_args()
 
@@ -18,7 +18,12 @@ def main():
     trigger = args.trigger
 
     methods = ["naive", "linear", "poisson_event", "exclusive_categories"]
-    colors = {"naive": "red", "linear": "blue", "poisson_event": "green", "exclusive_categories": "purple"}
+    methods = ["naive", "poisson_event", "decorrelated_bootstrap"]
+    colors = {"naive": "red", "linear": "blue", "copula": "orange",
+              "poisson_event": "green", "exclusive_categories": "purple",
+              "decorrelated_bootstrap": "olive"}
+    method_label_map = {"naive": "Independent", "linear": "Overlap", "copula": "Copula",
+                        "poisson_event": "Poisson Bootstrap", "decorrelated_bootstrap": "Decorrelated Bootstrap"}
 
     os.makedirs("plots", exist_ok=True)
 
@@ -31,9 +36,10 @@ def main():
     for method in methods:
         # 1. Load the generated data for this method
         file_list = glob.glob(f"results/global_stat_{trigger}_{method}_*.npy")
+        file_list = None
         if not file_list:
             # Fallback if you already merged them
-            file_list = glob.glob(f"results/merged/final_{trigger}_{method}.npy")
+            file_list = glob.glob(f"results/merged_5param/final_{trigger}_{method}.npy")
             if not file_list:
                 continue
 
@@ -83,8 +89,8 @@ def main():
                  label=f"{method.capitalize()} (N={MaxEvents})", color=colors[method], lw=2)
 
     # 6. Format the Plot
-    plt.title(f"Analysis-Wide Global Significance vs. BumpHunter Significance ({trigger.upper()})", fontsize=14)
-    plt.xlabel("Observed BumpHunter Significance ($Z_{local}$)", fontsize=12)
+    plt.title(f"Trigger-Wide Global Significance vs. BumpHunter Significance ({trigger.upper()})", fontsize=14)
+    plt.xlabel("Highest Observed BumpHunter Significance Across All Mass Channels ($Z_{local}$)", fontsize=12)
     plt.ylabel("Global Significance ($Z_{global}$)", fontsize=12)
     
     # Add standard discovery thresholds

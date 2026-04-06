@@ -16,7 +16,7 @@ def main():
     methods = ["naive", "linear", "copula"]
     colors = {"naive": "red", "linear": "blue"}
     methods = ["naive", "copula", "poisson_event", "decorrelated_bootstrap"]
-    # methods = ["naive", "poisson_event"]
+    methods = ["naive", "poisson_event", "decorrelated_bootstrap"]
     # colors = {"naive": "red", "copula": "green", "poisson_event": "blue", "decorrelated_bootstrap": "olive"}
     colors = {"naive": "red", "linear": "blue", "copula": "orange",
               "poisson_event": "green", "exclusive_categories": "purple",
@@ -42,7 +42,7 @@ def main():
             # file_list = glob.glob(f"results/global_stat_{trigger}_{method}_*.npy")
             file_list = None
             if not file_list:
-                file_list = glob.glob(f"results/merged/final_{trigger}_{method}.npy")
+                file_list = glob.glob(f"results/merged_5param/final_{trigger}_{method}.npy")
                 
             if not file_list:
                 print(f"[{method.upper()}] Missing data for {trigger}. Cannot compute experiment-wide.")
@@ -110,7 +110,7 @@ def main():
     plt.grid(True, which="both", linestyle="--", alpha=0.5)
     plt.tight_layout()
     
-    plot_out = "plots/Analysis_Wide_Global_Z_bincount.png"
+    plot_out = "plots/Analysis_Wide_Global_Z_bin.png"
     plt.savefig(plot_out, dpi=300)
     print(f"\n{'-'*65}\nMaster plot saved to {plot_out}\n")
 
