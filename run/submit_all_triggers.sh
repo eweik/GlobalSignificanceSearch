@@ -1,12 +1,12 @@
 #!/bin/bash
 
 # Default values if no arguments are provided
-TOTAL_TOYS=${1:-30}
-TOYS_PER_JOB=${2:-10}
+TOTAL_TOYS=${1:-100000}
+TOYS_PER_JOB=${2:-5000}
 
 # Calculate jobs per method
 N_JOBS=$((TOTAL_TOYS / TOYS_PER_JOB))
-TOTAL_SUBMISSIONS=$((7 * 5 * N_JOBS))
+TOTAL_SUBMISSIONS=$((7 * 4 * N_JOBS))
 
 # Ensure local directories exist before submission
 mkdir -p run/logs results
@@ -27,8 +27,9 @@ for TRIGGER in t1 t2 t3 t4 t5 t6 t7; do
     
     # Loop over all 5 methods
     # for METHOD in naive linear copula; do
-    # for METHOD in naive linear copula poisson_event exclusive_categories; do
-    for METHOD in copula; do
+    for METHOD in decorrelated_bootstrap; do
+    # for METHOD in naive linear copula poisson_event; do
+    # for METHOD in copula exclusive_categories; do
         condor_submit run/submit_toys.sub \
             trigger=$TRIGGER \
             method=$METHOD \

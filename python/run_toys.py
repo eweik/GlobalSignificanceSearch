@@ -64,14 +64,37 @@ def main(args):
         print(f"Error: No background fits found in {os.path.join(base_dir, 'fits')}"); sys.exit(1)
 
     # --- DATA LOADING & PREPARATION ---
+    u_bounds = {}
+    
     if args.method == "copula":
         copula_path = os.path.join(base_dir, "data", f"copula_{args.trigger}.npz")
         f = np.load(copula_path)
         matrix, col_names = f['copula'], list(f['columns'])
         cdfs = {m: np.cumsum(b) / np.sum(b) for m, b in bkg_expectations.items()}
-        mother_key = 'jj' if 'jj' in bkg_expectations else list(bkg_expectations.keys())[0]
-        # Use the expected inclusive yield as N_events to sample from
-        N_events = np.sum(bkg_expectations[mother_key])
+        
+        # --- NEW: Calculate the exact phase-space truncation bounds in uniform space ---
+        mass_path = os.path.join(base_dir, "data", f"masses_{args.trigger}.npz")
+        f_mass = np.load(mass_path)
+        mass_matrix_full = f_mass['masses']
+        cols_mass = list(f_mass['columns'])
+
+        for m, b in bkg_expectations.items():
+            idx = cols_mass.index(f"M{m}")
+            masses = mass_matrix_full[:, idx]
+            valid_masses = masses[masses > 0] * args.cms
+
+            fmin_val = channel_info[m]['bins'][0]
+            fmax_val = channel_info[m]['bins'][-1]
+
+            N_valid = len(valid_masses)
+            if N_valid > 0:
+                u_min = np.sum(valid_masses < fmin_val) / N_valid
+                u_max = np.sum(valid_masses <= fmax_val) / N_valid
+            else:
+                u_min, u_max = 0.0, 1.0
+            
+            # Save the exact bounds to filter the copula toys later
+            u_bounds[m] = (u_min, u_max)
 
     elif args.method in ["poisson_event", "exclusive_categories", "decorrelated_bootstrap"]:
         mass_path = os.path.join(base_dir, "data", f"masses_{args.trigger}.npz")
@@ -80,7 +103,6 @@ def main(args):
         N_events = len(mass_matrix)
 
         if args.method == "exclusive_categories":
-            # Map events to orthogonal 9-bit categories
             valid_mask = mass_matrix > 0
             powers = 2 ** np.arange(len(col_names))
             event_patterns = valid_mask.dot(powers)
@@ -94,7 +116,6 @@ def main(args):
     mode_str = "FIXED-DOF REFIT" if args.fit else "NO FIT (FROZEN BKG)"
     print(f"Generating {args.toys} {args.method} toys for {args.trigger} | Mode: {mode_str}")
     start_time = time.time()
-
     
     while len(stats) < args.toys and attempts < max_attempts:
         attempts += 1
@@ -135,7 +156,6 @@ def main(args):
                     ov_frac = overlap_map.get(m, 0.1)
                     m_centers = channel_info[m]['centers']
 
-                    # 1. Exact Bin Alignment
                     jj_b_aligned = np.zeros(len(b))
                     jj_pseudo_int = np.zeros(len(b), dtype=int)
 
@@ -146,17 +166,12 @@ def main(args):
                             jj_b_aligned[i] = jj_b[min_idx]
                             jj_pseudo_int[i] = jj_pseudo[min_idx]
 
-                    # 2. Bivariate Poisson math
                     lambda_shared = np.minimum(b * ov_frac, jj_b_aligned)
                     p_transfer = lambda_shared / np.maximum(jj_b_aligned, 1e-15)
-
-                    # 3. Draw correlated events
                     ov_counts = np.random.binomial(jj_pseudo_int, p_transfer)
 
-                    # 4. Draw independent events to PERFECTLY restore target sub-channel mean
                     ind_b = np.maximum(0, b - lambda_shared)
                     ind_counts = np.random.poisson(ind_b)
-
                     toy = ov_counts + ind_counts
 
                 if np.sum(toy) < 50: continue
@@ -169,28 +184,37 @@ def main(args):
                 channels_searched += 1
 
         elif args.method == "copula":
-            # 1. Sample N times globally for this toy
-            N_draw = np.random.poisson(N_events)
+            # 1. Sample N times globally from the full copula matrix
+            N_draw = np.random.poisson(len(matrix))
             sampled_rows = matrix[np.random.choice(len(matrix), size=N_draw, replace=True)]
             
             for m, b in bkg_expectations.items():
                 idx = col_names.index(f"M{m}")
                 
-                # 2. Extract valid values for this specific sub-channel
-                v_correlated = sampled_rows[sampled_rows[:, idx] >= 0, idx]
+                # 2. Extract raw uniform copula values
+                u_raw = sampled_rows[sampled_rows[:, idx] >= 0, idx]
                 
-                if len(v_correlated) == 0:
+                # 3. Apply phase-space cuts in uniform space
+                u_min, u_max = u_bounds[m]
+                mask_in_window = (u_raw >= u_min) & (u_raw <= u_max)
+                u_in_window = u_raw[mask_in_window]
+                
+                if len(u_in_window) == 0:
                     toy = np.zeros(len(b), dtype=int)
                 else:
-                    # Smear slightly to prevent binning artifacts inherited from the copula extraction
-                    U_final = v_correlated + np.random.uniform(-0.0002, 0.0002, size=len(v_correlated))
+                    # Jitter to break ties from empirical extraction
+                    u_jittered = u_in_window + np.random.uniform(-0.0002, 0.0002, size=len(u_in_window))
                     
-                    # Reflect boundaries to strictly bound within [0, 1)
-                    U_final = np.where(U_final < 0.0, np.abs(U_final), U_final)
-                    U_final = np.where(U_final >= 1.0, 1.99999 - U_final, U_final)
+                    # 4. Transform to strictly local truncated [0, 1) space
+                    # Max check ensures we don't divide by zero if bounds are identical
+                    u_trunc = (u_jittered - u_min) / max(u_max - u_min, 1e-10)
                     
-                    # 3. Invert back into un-binned target distribution via CDF
-                    toy = np.bincount(np.searchsorted(cdfs[m], U_final), minlength=len(b))
+                    # Bound reflections for safety
+                    u_trunc = np.abs(u_trunc)
+                    u_trunc = np.where(u_trunc >= 1.0, 1.99999 - u_trunc, u_trunc)
+                    
+                    # 5. Map to physical binned mass via Inverse CDF
+                    toy = np.bincount(np.searchsorted(cdfs[m], u_trunc), minlength=len(b))
 
                 if np.sum(toy) < 50: continue
 
@@ -203,10 +227,19 @@ def main(args):
                 max_t = max(max_t, fast_bumphunter_stat(toy, active_bkg))
                 channels_searched += 1
 
-        elif args.method in ["poisson_event", "exclusive_categories"]:
-            if args.method == "poisson_event":
+        elif args.method in ["poisson_event", "exclusive_categories", "decorrelated_bootstrap"]:
+            if args.method == "decorrelated_bootstrap":
+                shuffled_matrix = np.copy(mass_matrix)
+                for col_idx in range(shuffled_matrix.shape[1]):
+                    np.random.shuffle(shuffled_matrix[:, col_idx])
+
+                N_draw = np.random.poisson(N_events)
+                sampled_rows = shuffled_matrix[np.random.choice(N_events, size=N_draw, replace=True)]
+
+            elif args.method == "poisson_event":
                 N_draw = np.random.poisson(N_events)
                 sampled_rows = mass_matrix[np.random.choice(N_events, size=N_draw, replace=True)]
+                
             else:
                 sampled_rows_list = []
                 for p, indices in pattern_indices.items():
@@ -235,36 +268,6 @@ def main(args):
                     if not fit_ok: fit_failures += 1; continue
                 else: 
                     active_bkg = b 
-
-                max_t = max(max_t, fast_bumphunter_stat(toy, active_bkg))
-                channels_searched += 1
-
-        elif args.method == "decorrelated_bootstrap":
-            # 1. Break the correlation by independently shuffling each channel's column
-            # We do this once per toy to ensure a fresh random permutation
-            shuffled_matrix = np.copy(mass_matrix)
-            for col_idx in range(shuffled_matrix.shape[1]):
-                np.random.shuffle(shuffled_matrix[:, col_idx])
-
-            # 2. Perform the standard Poisson bootstrap on the now-independent columns
-            N_draw = np.random.poisson(N_events)
-            sampled_rows = shuffled_matrix[np.random.choice(N_events, size=N_draw, replace=True)]
-
-            for m, b in bkg_expectations.items():
-                idx = col_names.index(f"M{m}")
-                masses = sampled_rows[:, idx]
-                valid_masses = masses[masses > 0]
-                physical_masses = valid_masses * args.cms
-
-                toy, _ = np.histogram(physical_masses, bins=channel_info[m]['bins'])
-
-                if np.sum(toy) < 50: continue
-
-                if args.fit:
-                    active_bkg, fit_ok = do_fit_and_get_bkg(toy, m, b, channel_info, tf1_templates[m], args, syst_envelopes[m])
-                    if not fit_ok: fit_failures += 1; continue
-                else:
-                    active_bkg = b
 
                 max_t = max(max_t, fast_bumphunter_stat(toy, active_bkg))
                 channels_searched += 1
@@ -298,7 +301,7 @@ if __name__ == '__main__':
     p.add_argument('--method', choices=["naive", "copula", "linear", "poisson_event", "exclusive_categories", "decorrelated_bootstrap"], required=True)
     p.add_argument('--cms', type=float, default=13000.)
     p.add_argument('-b', '--batch', action='store_true')
-    p.add_argument('--fit', action='store_true')
+    p.add_argument('--fit', action='store_true', default=False)
     p.add_argument('--chimax', type=float, default=2.0)
     p.add_argument('--jobid', type=str, default="local")
     main(p.parse_args())

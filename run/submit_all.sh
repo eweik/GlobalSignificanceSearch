@@ -22,9 +22,9 @@ echo "================================================="
 
 # Loop through all three methods and submit them
 # for METHOD in naive linear copula; do
-for METHOD in decorrelated_bootstrap; do
+# for METHOD in decorrelated_bootstrap; do
 # for METHOD in poisson_event exclusive_categories; do
-# for METHOD in copula; do
+for METHOD in copula; do
     echo "Submitting $METHOD..."
     condor_submit run/submit_toys.sub \
         trigger=$TRIGGER \

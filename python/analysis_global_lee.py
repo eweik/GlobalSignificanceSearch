@@ -14,11 +14,9 @@ def main():
 
     target_Z = args.ExpectedLocalZvalue
     methods = ["naive", "linear", "copula"]
-    colors = {"naive": "red", "linear": "blue", "copula": "green"}
-    methods = ["naive", "linear"]
     colors = {"naive": "red", "linear": "blue"}
-    methods = ["naive", "linear", "poisson_event", "exclusive_categories"]
-    colors = {"naive": "red", "linear": "blue", "poisson_event": "green", "exclusive_categories": "purple"}
+    methods = ["naive", "copula", "poisson_event", "decorrelated_bootstrap"]
+    colors = {"naive": "red", "copula": "green", "poisson_event": "blue", "decorrelated_bootstrap": "olive"}
     
     os.makedirs("plots", exist_ok=True)
 
@@ -85,8 +83,9 @@ def main():
         z_global_curve = stats.norm.isf(p_global_curve)
 
         valid = (z_global_curve > -10) & np.isfinite(z_global_curve)
+        method_label = label_dict[method]
         plt.plot(z_local_sorted[valid], z_global_curve[valid],
-                 label=f"{method.capitalize()} (N={min_toys})", color=colors[method], lw=2)
+                 label=f"{method_label} (N={min_toys})", color=colors[method], lw=2)
 
     # 7. Format the Plot
     plt.title("Analysis-Wide Global Significance vs. BumpHunter Significance", fontsize=14)
