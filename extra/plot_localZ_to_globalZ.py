@@ -11,14 +11,19 @@ def main():
     parser.add_argument("--ExpectedLocalZvalue", type=float, default=5.0,
                         help="Expected local significance (default: 5.0)")
     parser.add_argument("--trigger", type=str, default="t2",
-                        help="Trigger to analyze (default: t1)")
+                        help="Trigger to analyze (default: t2)")
+    # --- NEW: Argument to select background type ---
+    parser.add_argument("--bkg", choices=["func", "matrix"], default="func",
+                        help="Background model used for the pseudo-experiments (func or matrix)")
     args = parser.parse_args()
 
     ExpectedLocalZvalue = args.ExpectedLocalZvalue
     trigger = args.trigger
+    bkg_tag = "BKGfunc" if args.bkg == "func" else "BKGmatrix"
 
-    methods = ["naive", "linear", "poisson_event", "exclusive_categories"]
-    methods = ["naive", "poisson_event", "decorrelated_bootstrap"]
+    # Included Copula as it's typically compared against these
+    methods = ["naive", "copula", "poisson_event", "decorrelated_bootstrap"]
+    # methods = ["naive", "poisson_event", "decorrelated_bootstrap"]
     colors = {"naive": "red", "linear": "blue", "copula": "orange",
               "poisson_event": "green", "exclusive_categories": "purple",
               "decorrelated_bootstrap": "olive"}
@@ -29,19 +34,26 @@ def main():
 
     print(f"\n############## START ################")
     print(f"Searching for bumps with Local Z >= {ExpectedLocalZvalue}")
-    print(f"Trigger: {trigger.upper()}")
+    print(f"Trigger: {trigger.upper()} | Background Model: {bkg_tag}")
 
     plt.figure(figsize=(10, 6))
 
     for method in methods:
-        # 1. Load the generated data for this method
-        file_list = glob.glob(f"results/global_stat_{trigger}_{method}_*.npy")
-        file_list = None
+        # 1. Load the generated data for this method (Fixed the file_list override bug)
+        # First, look for individual unmerged files with the appropriate background tag
+        file_pattern = f"results/global_stat_{trigger}_{method}_*_{bkg_tag}.npy"
+        file_list = glob.glob(file_pattern)
+        
         if not file_list:
-            # Fallback if you already merged them
-            file_list = glob.glob(f"results/merged_5param/final_{trigger}_{method}.npy")
+            # Fallback to merged directories
+            file_list = glob.glob(f"results/merged/final_{trigger}_{method}_{bkg_tag}.npy")
             if not file_list:
-                continue
+                # Absolute fallback to legacy naming if tags aren't found
+                file_list = glob.glob(f"results/merged_5param/final_{trigger}_{method}.npy")
+                # file_list = glob.glob(f"results/merged_bin/final_{trigger}_{method}.npy")
+                if not file_list:
+                    print(f"Warning: No data found for {method} with tag {bkg_tag}. Skipping.")
+                    continue
 
         arrays = [np.load(f) for f in file_list]
         t_max_dist = np.concatenate(arrays)
@@ -85,11 +97,14 @@ def main():
         z_global_curve = stats.norm.isf(p_global_curve)
 
         valid = (z_global_curve > -10) & np.isfinite(z_global_curve)
+        
+        label_name = method_label_map.get(method, method.capitalize())
         plt.plot(z_local_sorted[valid], z_global_curve[valid],
-                 label=f"{method.capitalize()} (N={MaxEvents})", color=colors[method], lw=2)
+                 label=f"{label_name} (N={MaxEvents})", color=colors.get(method, "black"), lw=2)
 
     # 6. Format the Plot
-    plt.title(f"Trigger-Wide Global Significance vs. BumpHunter Significance ({trigger.upper()})", fontsize=14)
+    bkg_display = "5-param" if args.bkg == "func" else "Raw Bin Counts"
+    plt.title(f"Trigger-Wide Global Significance vs. BumpHunter Significance\n{trigger.upper()} | {bkg_display} Background", fontsize=14)
     plt.xlabel("Highest Observed BumpHunter Significance Across All Mass Channels ($Z_{local}$)", fontsize=12)
     plt.ylabel("Global Significance ($Z_{global}$)", fontsize=12)
     
@@ -105,7 +120,7 @@ def main():
     plt.grid(True, which="both", linestyle="--", alpha=0.5)
     plt.tight_layout()
     
-    plot_out = f"plots/Local_vs_Global_Z_{trigger}.png"
+    plot_out = f"plots/Local_vs_Global_Z_{trigger}_{bkg_tag}.png"
     plt.savefig(plot_out, dpi=300)
     print(f"\nPlot saved to {plot_out}")
 
