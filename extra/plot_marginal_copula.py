@@ -64,12 +64,13 @@ def get_channel_data(base_dir, trigger, channel, cms, mass_matrix, col_names):
         
     return data_counts, expected_counts, cdf, v_bins, c, (u_min, u_max), x_dense, y_dense
 
-def generate_expected_copula_marginal(copula_matrix, col_names, channel, u_bounds, cdf, centers, bins):
+# --- FIX 1: Pass in col_names_cop to map the columns safely ---
+def generate_expected_copula_marginal(copula_matrix, col_names_cop, channel, u_bounds, cdf, centers, bins):
     """
     Generates a massive sample from the copula, applies the exact pseudo-experiment
     truncation logic, and averages the result to find the expected unscaled toy marginal.
     """
-    idx = col_names.index(f"M{channel}")
+    idx_cop = col_names_cop.index(f"M{channel}")
     N_data = len(copula_matrix)
     
     N_mult = 1000
@@ -78,8 +79,8 @@ def generate_expected_copula_marginal(copula_matrix, col_names, channel, u_bound
     # 1. Sample from the copula globally
     sampled_rows = copula_matrix[np.random.choice(N_data, size=N_draw_total, replace=True)]
     
-    # 2. Extract raw uniform values
-    u_raw = sampled_rows[sampled_rows[:, idx] >= 0, idx]
+    # 2. Extract raw uniform values using the safe index
+    u_raw = sampled_rows[sampled_rows[:, idx_cop] >= 0, idx_cop]
     
     # 3. Apply phase-space cuts in uniform space
     u_min, u_max = u_bounds
@@ -130,15 +131,19 @@ def main():
     f_copula = np.load(copula_path)
     mass_matrix = f_mass['masses']
     copula_matrix = f_copula['copula']
-    col_names = list(f_mass['columns'])
+    
+    # Extract both lists to prevent mismatch errors
+    col_names_mass = list(f_mass['columns'])
+    col_names_cop = list(f_copula['columns'])
 
     print("Loading fits and calculating CDFs & Bounds...")
-    d1, f1, cdf1, bins1, centers1, bounds1, x_dense1, y_dense1 = get_channel_data(base_dir, args.trigger, args.ch1, args.cms, mass_matrix, col_names)
-    d2, f2, cdf2, bins2, centers2, bounds2, x_dense2, y_dense2 = get_channel_data(base_dir, args.trigger, args.ch2, args.cms, mass_matrix, col_names)
+    d1, f1, cdf1, bins1, centers1, bounds1, x_dense1, y_dense1 = get_channel_data(base_dir, args.trigger, args.ch1, args.cms, mass_matrix, col_names_mass)
+    d2, f2, cdf2, bins2, centers2, bounds2, x_dense2, y_dense2 = get_channel_data(base_dir, args.trigger, args.ch2, args.cms, mass_matrix, col_names_mass)
 
     print("Generating and mapping Copula toys (applying exact truncation logic)...")
-    expected_toys1 = generate_expected_copula_marginal(copula_matrix, col_names, args.ch1, bounds1, cdf1, centers1, bins1)
-    expected_toys2 = generate_expected_copula_marginal(copula_matrix, col_names, args.ch2, bounds2, cdf2, centers2, bins2)
+    # Pass col_names_cop to the toy generator
+    expected_toys1 = generate_expected_copula_marginal(copula_matrix, col_names_cop, args.ch1, bounds1, cdf1, centers1, bins1)
+    expected_toys2 = generate_expected_copula_marginal(copula_matrix, col_names_cop, args.ch2, bounds2, cdf2, centers2, bins2)
 
     print("Generating plot...")
     fig, axes = plt.subplots(1, 2, figsize=(16, 7))
@@ -179,8 +184,9 @@ def main():
     # Plot Ch2
     plot_marginal(axes[1], args.ch2, bins2, centers2, d2, f2, expected_toys2, x_dense2, y_dense2)
 
-    plt.suptitle(f"Copula Marginal Fidelity Validation | Trigger: {args.trigger.upper()}", fontsize=18)
-    plt.tight_layout()
+    # --- FIX 2: Apply fontweight and tight_layout rect ---
+    plt.suptitle(f"Copula Marginal Fidelity Validation | Trigger: {args.trigger.upper()}", fontsize=18, fontweight='bold', y=1.02)
+    fig.tight_layout(rect=[0, 0, 1, 0.96])
 
     os.makedirs(os.path.join(base_dir, "plots"), exist_ok=True)
     out_path = os.path.join(base_dir, "plots", f"marginal_agreement_dots_{args.trigger}_{args.ch1}_{args.ch2}.png")

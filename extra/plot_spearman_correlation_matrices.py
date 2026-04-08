@@ -62,7 +62,7 @@ def map_uniform_to_mass(u_array, u_bounds, cdf, centers, apply_jitter=False):
 def safe_spearman(x, y):
     """Safely calculates Spearman correlation, returning 0.0 for zero-variance arrays."""
     if len(x) < 2 or np.std(x) == 0 or np.std(y) == 0:
-        return 0.0  # Changed from np.nan to 0.0
+        return 0.0
 
     s, _ = stats.spearmanr(x, y)
 
@@ -92,13 +92,16 @@ def main():
     f_copula = np.load(copula_path)
     mass_matrix = f_mass['masses']
     copula_matrix = f_copula['copula']
-    col_names = list(f_mass['columns'])
+    
+    # FIX 1: Extract both lists of column names for correct mapping
+    col_names_mass = list(f_mass['columns'])
+    col_names_cop = list(f_copula['columns'])
 
-    n_cols = len(col_names)
+    n_cols = len(col_names_mass)
     
     channel_info = {}
     print("Loading 5-parameter fits and calculating phase-space bounds...")
-    for i, col in enumerate(col_names):
+    for i, col in enumerate(col_names_mass):
         channel = col.replace("M", "")
         data = get_channel_data(base_dir, args.trigger, channel, args.cms)
         if data is None:
@@ -124,7 +127,8 @@ def main():
     corr_copula = np.eye(n_cols)
 
     print("Calculating pairwise Spearman Rank correlations...")
-    N_toys = 200000 
+    # FIX 2: Oversample Copula to ensure survival in the deep tails
+    N_toys = 10_000_000 
     
     for i in range(n_cols):
         for j in range(i + 1, n_cols):
@@ -132,6 +136,7 @@ def main():
                 continue
                 
             info_i, info_j = channel_info[i], channel_info[j]
+            col_i, col_j = col_names_mass[i], col_names_mass[j]
             
             # --- 1. RAW DATA (In-Window) ---
             m_i_all = mass_matrix[:, i] * args.cms
@@ -146,9 +151,13 @@ def main():
             corr_raw[i, j] = corr_raw[j, i] = safe_spearman(m_i_raw, m_j_raw)
 
             # --- 2. COPULA TOYS (Mapped to 5-Param) ---
+            # FIX 3: Map the indices safely using string names
+            idx_cop_i = col_names_cop.index(col_i)
+            idx_cop_j = col_names_cop.index(col_j)
+            
             random_indices = np.random.choice(len(copula_matrix), size=N_toys, replace=True)
-            u_i_sampled = copula_matrix[random_indices, i]
-            u_j_sampled = copula_matrix[random_indices, j]
+            u_i_sampled = copula_matrix[random_indices, idx_cop_i]
+            u_j_sampled = copula_matrix[random_indices, idx_cop_j]
             
             u_min_i, u_max_i = info_i['u_bounds']
             u_min_j, u_max_j = info_j['u_bounds']
@@ -172,17 +181,18 @@ def main():
     vmin, vmax = -0.1, 1.0 
 
     sns.heatmap(corr_raw, ax=axes[0], cmap=cmap, vmin=vmin, vmax=vmax,
-                xticklabels=col_names, yticklabels=col_names, 
+                xticklabels=col_names_mass, yticklabels=col_names_mass, 
                 annot=True, fmt=".2f", square=True, cbar_kws={"shrink": .8})
     axes[0].set_title(f"Raw Data Spearman $\\rho$ (In-Window)\n{args.trigger.upper()}", fontsize=14)
 
     sns.heatmap(corr_copula, ax=axes[1], cmap=cmap, vmin=vmin, vmax=vmax,
-                xticklabels=col_names, yticklabels=col_names, 
+                xticklabels=col_names_mass, yticklabels=col_names_mass, 
                 annot=True, fmt=".2f", square=True, cbar_kws={"shrink": .8})
     axes[1].set_title(f"Copula Toys Spearman $\\rho$ (Mapped to 5-Param)\n{args.trigger.upper()}", fontsize=14)
 
-    plt.suptitle("Validation of Global Rank Correlation (Spearman) Preservation", fontsize=18, y=1.02)
-    plt.tight_layout()
+    # FIX 4: Add fontweight bold and tight_layout rect to prevent text bleed
+    plt.suptitle("Validation of Global Rank Correlation (Spearman) Preservation", fontsize=18, fontweight='bold', y=1.02)
+    fig.tight_layout(rect=[0, 0, 1, 0.96])
     
     os.makedirs(os.path.join(base_dir, "plots"), exist_ok=True)
     out_path = os.path.join(base_dir, "plots", f"full_spearman_matrix_comparison_{args.trigger}.png")
