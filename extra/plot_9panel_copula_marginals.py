@@ -155,9 +155,10 @@ def plot_marginal(ax, channel, bins, centers, data, fit, toys, x_dense, y_dense,
     # Format subplot labels and scaling
     prof_channel = f"$m_{{{channel}}}$"
     
-    ax.set_title(f"Marginal Agreement: {channel.upper()} Channel", fontsize=16)
-    ax.set_xlabel(f"{prof_channel} [GeV]", fontsize=14)
-    ax.set_ylabel("Events / Bin", fontsize=14)
+    # ax.set_title(f"Marginal Agreement: {channel.upper()} Channel", fontsize=16)
+    ax.set_title(f"{channel.upper()} Channel", fontsize=28)
+    ax.set_xlabel(f"{prof_channel} [GeV]", fontsize=24)
+    ax.set_ylabel("Events / Bin", fontsize=24)
     ax.set_yscale('log')
     
     # --- EXTEND X-AXIS ---
@@ -173,7 +174,7 @@ def plot_marginal(ax, channel, bins, centers, data, fit, toys, x_dense, y_dense,
     max_y = np.max(data) * 5.0
     ax.set_ylim(min_y, max_y)
     
-    ax.legend(fontsize=11, frameon=True, edgecolor='black', framealpha=0.9)
+    ax.legend(fontsize=12, frameon=True, edgecolor='black', framealpha=0.9)
     ax.grid(True, which="both", linestyle="--", alpha=0.3)
 
 def main():
@@ -228,7 +229,7 @@ def main():
         fig_indiv, ax_indiv = plt.subplots(figsize=(10, 8))
         plot_marginal(ax_indiv, channel, bins, centers, d, f, expected_toys, x_dense, y_dense, chi2_val, ndf, p_val, n_params)
         
-        fig_indiv.suptitle(f"Copula Marginal Fidelity Validation | Trigger: {args.trigger.upper()}", fontsize=18, fontweight='bold', y=1.02)
+        fig_indiv.suptitle(f"Marginal Fidelity Validation | Trigger: {args.trigger.upper()}", fontsize=24, fontweight='bold', y=1.02)
         fig_indiv.tight_layout()
         
         out_path_indiv = os.path.join(base_dir, "plots", f"marginal_agreement_{args.trigger}_{channel}.png")
@@ -239,7 +240,7 @@ def main():
     for j in range(n_cols, len(axes_flat)):
         axes_flat[j].set_visible(False)
 
-    fig_grid.suptitle(f"Copula Marginal Fidelity Validation (All Channels) | Trigger: {args.trigger.upper()}", fontsize=22, fontweight='bold', y=1.02)
+    fig_grid.suptitle(f"Marginal Fidelity Validation (All Channels) | Trigger: {args.trigger.upper()}", fontsize=36, fontweight='bold', y=1.02)
     fig_grid.tight_layout(rect=[0, 0, 1, 0.98], h_pad=3.0, w_pad=3.0)
 
     out_path_grid = os.path.join(base_dir, "plots", f"marginal_agreement_all9_{args.trigger}.png")

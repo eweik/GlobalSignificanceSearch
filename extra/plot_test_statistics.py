@@ -13,8 +13,8 @@ def main():
     methods = {
         "naive": {"color": "red", "label": "Independent Poisson"},
         # "linear": {"color": "orange", "label": "Linear (Bin Locked)"},
-        # "copula": {"color": "green", "label": "Empirical Copula (Migrated)"},
-        # "poisson_event": {"color": "blue", "label": "Poisson Bootstrap"},
+        "copula": {"color": "green", "label": "Empirical Copula"},
+        "poisson_event": {"color": "blue", "label": "Poisson Bootstrap"},
         # "decorrelated_bootstrap": {"color": "orange", "label": "Decorrelated Bootstrap"}
     }
 
@@ -40,9 +40,9 @@ def main():
                  color=settings['color'], linewidth=2.5, density=True)
 
     plt.yscale('log')
-    plt.xlabel(r'Global Test Statistic ($t_{max}$)', fontsize=16)
-    plt.ylabel('Probability Density', fontsize=16)
-    plt.title(f'Global Test Statistic Distribution - Trigger {trigger.upper()}', fontsize=18)
+    plt.xlabel(r'Global Test Statistic ($t_{max}$)', fontsize=20)
+    plt.ylabel('Probability Density', fontsize=20)
+    plt.title(f'Global Test Statistic Distribution - Trigger {trigger.upper()}', fontsize=24)
     plt.legend(fontsize=11, frameon=False, loc='upper right')
 
     # Automatically adjust subplot parameters to give specified padding

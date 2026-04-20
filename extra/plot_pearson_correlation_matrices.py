@@ -76,7 +76,7 @@ def format_axes_labels(ax):
     ax.set_yticklabels(ax.get_yticklabels(), fontsize=14, rotation=0, va='center')
 
 def main():
-    parser = argparse.ArgumentParser(description="Plot Full Pearson Matrix: Raw vs Empirical Bootstrap vs Copula")
+    parser = argparse.ArgumentParser(description="Plot Full Pearson Matrix: Raw vs Empirical Bootstrap vs Copula vs Independent")
     parser.add_argument('--trigger', type=str, required=True, help="Trigger name")
     parser.add_argument('--cms', type=float, default=13000., help="Center of mass energy")
     args = parser.parse_args()
@@ -131,6 +131,7 @@ def main():
     corr_raw = np.eye(n_cols)
     corr_boot = np.eye(n_cols)
     corr_copula = np.eye(n_cols)
+    corr_indep = np.eye(n_cols)
 
     N_toys = 10_000_000 
     print(f"Generating global sampling indices for {N_toys} events...")
@@ -194,13 +195,26 @@ def main():
             
             corr_copula[i, j] = corr_copula[j, i] = safe_pearson(m_i_toy, m_j_toy)
 
-    # --- 4. PLOTTING ---
+            # --- 4. INDEPENDENT POISSON TOYS (Uncorrelated Sample) ---
+            # Generate completely independent uniform arrays to destroy correlation,
+            # matching the size of the copula survivors for consistent statistical power.
+            n_survivors = len(u_i_survivors)
+            if n_survivors > 0:
+                u_i_indep = np.random.uniform(u_min_i, u_max_i, size=n_survivors)
+                u_j_indep = np.random.uniform(u_min_j, u_max_j, size=n_survivors)
+
+                m_i_indep = map_uniform_to_mass(u_i_indep, info_i['u_bounds'], info_i['cdf'], info_i['centers'], apply_jitter=True)
+                m_j_indep = map_uniform_to_mass(u_j_indep, info_j['u_bounds'], info_j['cdf'], info_j['centers'], apply_jitter=True)
+
+                corr_indep[i, j] = corr_indep[j, i] = safe_pearson(m_i_indep, m_j_indep)
+
+    # --- 5. PLOTTING ---
     os.makedirs(os.path.join(base_dir, "plots"), exist_ok=True)
     cmap = sns.diverging_palette(220, 20, as_cmap=True)
     vmin, vmax = -0.1, 1.0 
     
-    # 4a. COMBINED PLOT (1x3 Layout)
-    fig, axes = plt.subplots(1, 3, figsize=(24, 8))
+    # 5a. COMBINED PLOT (1x4 Layout)
+    fig, axes = plt.subplots(1, 4, figsize=(32, 8))
 
     sns.heatmap(corr_raw, ax=axes[0], cmap=cmap, vmin=vmin, vmax=vmax,
                 xticklabels=prof_labels, yticklabels=prof_labels, 
@@ -211,14 +225,20 @@ def main():
     sns.heatmap(corr_boot, ax=axes[1], cmap=cmap, vmin=vmin, vmax=vmax,
                 xticklabels=prof_labels, yticklabels=prof_labels, 
                 annot=True, fmt=".2f", square=True, cbar_kws={"shrink": .8})
-    axes[1].set_title(f"Empirical Bootstrap Pearson $r$\n($10^6$ Event Toys)", fontsize=16, pad=15)
+    axes[1].set_title(f"Empirical Bootstrap Pearson $r$\n($10^7$ Event Toys)", fontsize=16, pad=15)
     format_axes_labels(axes[1])
 
     sns.heatmap(corr_copula, ax=axes[2], cmap=cmap, vmin=vmin, vmax=vmax,
                 xticklabels=prof_labels, yticklabels=prof_labels, 
                 annot=True, fmt=".2f", square=True, cbar_kws={"shrink": .8})
-    axes[2].set_title(f"Copula Pearson $r$\n($10^6$ Event Toys)", fontsize=16, pad=15)
+    axes[2].set_title(f"Copula Pearson $r$\n($10^7$ Event Toys)", fontsize=16, pad=15)
     format_axes_labels(axes[2])
+
+    sns.heatmap(corr_indep, ax=axes[3], cmap=cmap, vmin=vmin, vmax=vmax,
+                xticklabels=prof_labels, yticklabels=prof_labels, 
+                annot=True, fmt=".2f", square=True, cbar_kws={"shrink": .8})
+    axes[3].set_title(f"Independent Poisson Pearson $r$\n(Uncorrelated Control)", fontsize=16, pad=15)
+    format_axes_labels(axes[3])
 
     plt.suptitle(f"Global Correlation Preservation Comparison - Trigger {args.trigger.upper()}", fontsize=20, y=1.05)
     plt.tight_layout()
@@ -228,7 +248,7 @@ def main():
     plt.close(fig)
     print(f"\nSuccessfully saved combined Pearson correlation matrix plot to: {out_path_combined}")
 
-    # 4b. INDIVIDUAL RAW DATA PLOT
+    # 5b. INDIVIDUAL RAW DATA PLOT
     fig_raw, ax_raw = plt.subplots(figsize=(10, 8))
     sns.heatmap(corr_raw, ax=ax_raw, cmap=cmap, vmin=vmin, vmax=vmax,
                 xticklabels=prof_labels, yticklabels=prof_labels, 
@@ -242,7 +262,7 @@ def main():
     plt.close(fig_raw)
     print(f"Successfully saved individual Raw Pearson matrix plot to: {out_path_raw}")
 
-    # 4c. INDIVIDUAL BOOTSTRAP TOYS PLOT
+    # 5c. INDIVIDUAL BOOTSTRAP TOYS PLOT
     fig_boot, ax_boot = plt.subplots(figsize=(10, 8))
     sns.heatmap(corr_boot, ax=ax_boot, cmap=cmap, vmin=vmin, vmax=vmax,
                 xticklabels=prof_labels, yticklabels=prof_labels, 
@@ -256,7 +276,7 @@ def main():
     plt.close(fig_boot)
     print(f"Successfully saved individual Bootstrap Pearson matrix plot to: {out_path_boot}")
 
-    # 4d. INDIVIDUAL COPULA TOYS PLOT
+    # 5d. INDIVIDUAL COPULA TOYS PLOT
     fig_cop, ax_cop = plt.subplots(figsize=(10, 8))
     sns.heatmap(corr_copula, ax=ax_cop, cmap=cmap, vmin=vmin, vmax=vmax,
                 xticklabels=prof_labels, yticklabels=prof_labels, 
@@ -269,6 +289,20 @@ def main():
     fig_cop.savefig(out_path_cop, dpi=300, bbox_inches='tight', pad_inches=0.05)
     plt.close(fig_cop)
     print(f"Successfully saved individual Copula Pearson matrix plot to: {out_path_cop}")
+
+    # 5e. INDIVIDUAL INDEPENDENT POISSON TOYS PLOT
+    fig_indep, ax_indep = plt.subplots(figsize=(10, 8))
+    sns.heatmap(corr_indep, ax=ax_indep, cmap=cmap, vmin=vmin, vmax=vmax,
+                xticklabels=prof_labels, yticklabels=prof_labels, 
+                annot=True, fmt=".2f", square=True, cbar_kws={"shrink": .8})
+    ax_indep.set_title(f"Independent Poisson Pearson $r$ (Uncorrelated)\nTrigger {args.trigger.upper()} ($10^7$ Event Toys)", fontsize=16, pad=15)
+    format_axes_labels(ax_indep)
+    plt.tight_layout()
+    
+    out_path_indep = os.path.join(base_dir, "plots", f"pearson_matrix_independent_{args.trigger}.png")
+    fig_indep.savefig(out_path_indep, dpi=300, bbox_inches='tight', pad_inches=0.05)
+    plt.close(fig_indep)
+    print(f"Successfully saved individual Independent Poisson matrix plot to: {out_path_indep}")
 
 if __name__ == "__main__":
     main()
