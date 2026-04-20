@@ -71,6 +71,11 @@ def safe_pearson(x, y):
         
     return r
 
+def format_axes_labels(ax):
+    """Helper function to apply professional formatting to heatmap axes."""
+    ax.set_xticklabels(ax.get_xticklabels(), fontsize=14, rotation=45, ha='right', rotation_mode='anchor')
+    ax.set_yticklabels(ax.get_yticklabels(), fontsize=14, rotation=0, va='center')
+
 def main():
     parser = argparse.ArgumentParser(description="Plot Full Pearson Matrix: Raw vs Copula Transformed")
     parser.add_argument('--trigger', type=str, required=True, help="Trigger name")
@@ -92,9 +97,11 @@ def main():
     mass_matrix = f_mass['masses']
     copula_matrix = f_copula['copula']
     
-    # Extract both lists of column names for correct mapping
     col_names_mass = list(f_mass['columns'])
     col_names_cop = list(f_copula['columns'])
+    
+    # Make labels professional (e.g., convert "Mjj" to mathematical "$m_{jj}$")
+    prof_labels = [f"$m_{{{col.replace('M', '')}}}$" if col.startswith("M") else col for col in col_names_mass]
 
     n_cols = len(col_names_mass)
     
@@ -126,7 +133,6 @@ def main():
     corr_copula = np.eye(n_cols)
 
     print("Calculating pairwise Pearson Linear correlations...")
-    # Oversample to ensure we have enough events surviving the tight phase-space masks
     N_toys = 10_000_000 
     
     for i in range(n_cols):
@@ -137,7 +143,7 @@ def main():
             info_i, info_j = channel_info[i], channel_info[j]
             col_i, col_j = col_names_mass[i], col_names_mass[j]
             
-            # --- 1. RAW DATA (In-Window) ---
+            # --- 1. RAW DATA ---
             m_i_all = mass_matrix[:, i] * args.cms
             m_j_all = mass_matrix[:, j] * args.cms
             
@@ -149,8 +155,7 @@ def main():
             
             corr_raw[i, j] = corr_raw[j, i] = safe_pearson(m_i_raw, m_j_raw)
 
-            # --- 2. COPULA TOYS (Mapped to 5-Param) ---
-            # Correctly map the indices using the column names
+            # --- 2. COPULA TOYS ---
             idx_cop_i = col_names_cop.index(col_i)
             idx_cop_j = col_names_cop.index(col_j)
             
@@ -167,35 +172,66 @@ def main():
             u_i_survivors = u_i_sampled[survivor_mask]
             u_j_survivors = u_j_sampled[survivor_mask]
             
-            # Map valid survivors to physical mass bins
             m_i_toy = map_uniform_to_mass(u_i_survivors, info_i['u_bounds'], info_i['cdf'], info_i['centers'], apply_jitter=True)
             m_j_toy = map_uniform_to_mass(u_j_survivors, info_j['u_bounds'], info_j['cdf'], info_j['centers'], apply_jitter=True)
             
             corr_copula[i, j] = corr_copula[j, i] = safe_pearson(m_i_toy, m_j_toy)
 
     # --- 3. PLOTTING ---
-    fig, axes = plt.subplots(1, 2, figsize=(18, 8))
+    os.makedirs(os.path.join(base_dir, "plots"), exist_ok=True)
     cmap = sns.diverging_palette(220, 20, as_cmap=True)
-    
     vmin, vmax = -0.1, 1.0 
+    
+    # 3a. COMBINED PLOT
+    fig, axes = plt.subplots(1, 2, figsize=(18, 8))
 
     sns.heatmap(corr_raw, ax=axes[0], cmap=cmap, vmin=vmin, vmax=vmax,
-                xticklabels=col_names_mass, yticklabels=col_names_mass, 
+                xticklabels=prof_labels, yticklabels=prof_labels, 
                 annot=True, fmt=".2f", square=True, cbar_kws={"shrink": .8})
-    axes[0].set_title(f"Raw Data Pearson $\\rho$ (In-Window)\n{args.trigger.upper()}", fontsize=14)
+    axes[0].set_title(f"Raw Data Pearson $r$ (In-Window)\n{args.trigger.upper()}", fontsize=15, pad=15)
+    format_axes_labels(axes[0])
 
     sns.heatmap(corr_copula, ax=axes[1], cmap=cmap, vmin=vmin, vmax=vmax,
-                xticklabels=col_names_mass, yticklabels=col_names_mass, 
+                xticklabels=prof_labels, yticklabels=prof_labels, 
                 annot=True, fmt=".2f", square=True, cbar_kws={"shrink": .8})
-    axes[1].set_title(f"Copula Toys Pearson $\\rho$ (Mapped to 5-Param)\n{args.trigger.upper()}", fontsize=14)
+    axes[1].set_title(f"Copula Toys Pearson $r$ (Mapped to 5-Param)\n{args.trigger.upper()}", fontsize=15, pad=15)
+    format_axes_labels(axes[1])
 
     plt.suptitle("Validation of Global Linear Correlation (Pearson) Preservation", fontsize=18, y=1.02)
     plt.tight_layout()
     
-    os.makedirs(os.path.join(base_dir, "plots"), exist_ok=True)
-    out_path = os.path.join(base_dir, "plots", f"full_pearson_matrix_comparison_{args.trigger}.png")
-    plt.savefig(out_path, dpi=300, bbox_inches='tight')
-    print(f"\nSuccessfully saved full Pearson correlation matrix plot to: {out_path}")
+    out_path_combined = os.path.join(base_dir, "plots", f"full_pearson_matrix_comparison_{args.trigger}.png")
+    fig.savefig(out_path_combined, dpi=300, bbox_inches='tight')
+    plt.close(fig)
+    print(f"\nSuccessfully saved combined Pearson correlation matrix plot to: {out_path_combined}")
+
+    # 3b. INDIVIDUAL RAW DATA PLOT
+    fig_raw, ax_raw = plt.subplots(figsize=(10, 8))
+    sns.heatmap(corr_raw, ax=ax_raw, cmap=cmap, vmin=vmin, vmax=vmax,
+                xticklabels=prof_labels, yticklabels=prof_labels, 
+                annot=True, fmt=".2f", square=True, cbar_kws={"shrink": .8})
+    ax_raw.set_title(f"Pearson Corrleation Coefficient $r$\nTrigger {args.trigger.upper()}", fontsize=16, pad=15)
+    format_axes_labels(ax_raw)
+    plt.tight_layout()
+    
+    out_path_raw = os.path.join(base_dir, "plots", f"pearson_matrix_raw_{args.trigger}.png")
+    fig_raw.savefig(out_path_raw, dpi=300, bbox_inches='tight')
+    plt.close(fig_raw)
+    print(f"Successfully saved individual Raw Pearson matrix plot to: {out_path_raw}")
+
+    # 3c. INDIVIDUAL COPULA TOYS PLOT
+    fig_cop, ax_cop = plt.subplots(figsize=(10, 8))
+    sns.heatmap(corr_copula, ax=ax_cop, cmap=cmap, vmin=vmin, vmax=vmax,
+                xticklabels=prof_labels, yticklabels=prof_labels, 
+                annot=True, fmt=".2f", square=True, cbar_kws={"shrink": .8})
+    ax_cop.set_title(f"Copula Toys Pearson $r$ (Mapped to 5-Param)\n{args.trigger.upper()}", fontsize=16, pad=15)
+    format_axes_labels(ax_cop)
+    plt.tight_layout()
+    
+    out_path_cop = os.path.join(base_dir, "plots", f"pearson_matrix_copula_{args.trigger}.png")
+    fig_cop.savefig(out_path_cop, dpi=300, bbox_inches='tight')
+    plt.close(fig_cop)
+    print(f"Successfully saved individual Copula Pearson matrix plot to: {out_path_cop}")
 
 if __name__ == "__main__":
     main()

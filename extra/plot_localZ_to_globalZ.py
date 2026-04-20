@@ -23,6 +23,7 @@ def main():
 
     # Included Copula as it's typically compared against these
     methods = ["naive", "copula", "poisson_event", "decorrelated_bootstrap"]
+    methods = ["naive"]
     # methods = ["naive", "poisson_event", "decorrelated_bootstrap"]
     colors = {"naive": "red", "linear": "blue", "copula": "orange",
               "poisson_event": "green", "exclusive_categories": "purple",
@@ -105,7 +106,7 @@ def main():
     # 6. Format the Plot
     bkg_display = "5-param" if args.bkg == "func" else "Raw Bin Counts"
     plt.title(f"Trigger-Wide Global Significance vs. BumpHunter Significance\n{trigger.upper()} | {bkg_display} Background", fontsize=14)
-    plt.xlabel("Highest Observed BumpHunter Significance Across All Mass Channels ($Z_{local}$)", fontsize=12)
+    plt.xlabel("Highest Observed BumpHunter Significance Across All Mass Channels ($Z_{BH}$)", fontsize=12)
     plt.ylabel("Global Significance ($Z_{global}$)", fontsize=12)
     
     # Add standard discovery thresholds
@@ -114,7 +115,7 @@ def main():
 
     # Add the "No Look-Elsewhere Effect" baseline (Z_global = Z_local)
     lims = [max(0, plt.xlim()[0]), min(8, plt.xlim()[1])]
-    plt.plot(lims, lims, 'k--', alpha=0.3, label="No LEE ($Z_{global} = Z_{local}$)")
+    plt.plot(lims, lims, 'k--', alpha=0.3, label="No LEE ($Z_{global} = Z_{BH}$)")
 
     plt.legend(loc="lower right")
     plt.grid(True, which="both", linestyle="--", alpha=0.5)

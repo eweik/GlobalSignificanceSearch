@@ -14,5 +14,5 @@ results/
 plots/*.pdf
 plots/*.png
 plots/
-
+logs/
 run/logs/

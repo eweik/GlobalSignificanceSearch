@@ -11,30 +11,30 @@ def main():
     trigger = args.trigger.lower()
 
     methods = {
-        "naive": {"color": "red", "label": "Naive (Independent)"},
+        "naive": {"color": "red", "label": "Independent Poisson"},
         # "linear": {"color": "orange", "label": "Linear (Bin Locked)"},
-        "copula": {"color": "green", "label": "Empirical Copula (Migrated)"},
-        "poisson_event": {"color": "blue", "label": "Poisson Bootstrap"},
-        "decorrelated_bootstrap": {"color": "orange", "label": "Decorrelated Bootstrap"}
+        # "copula": {"color": "green", "label": "Empirical Copula (Migrated)"},
+        # "poisson_event": {"color": "blue", "label": "Poisson Bootstrap"},
+        # "decorrelated_bootstrap": {"color": "orange", "label": "Decorrelated Bootstrap"}
     }
-                
+
     plt.figure(figsize=(10, 7))
 
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    results_dir = os.path.join(base_dir, "results/merged")
+    results_dir = os.path.join(base_dir, "results/merged_5param")
     os.makedirs(results_dir, exist_ok=True)
     plot_dir = os.path.join(base_dir, "plots")
     os.makedirs(plot_dir, exist_ok=True)
 
     for m, settings in methods.items():
         filename = os.path.join(results_dir, f"final_{trigger}_{m}.npy")
-        
+
         if not os.path.exists(filename):
             print(f"Warning: Data file {filename} not found. Skipping {m}.")
             continue
-            
+
         data = np.load(filename)
-        
+
         plt.hist(data, bins=50, histtype='step',
                  label=f"{settings['label']}",
                  color=settings['color'], linewidth=2.5, density=True)
@@ -42,11 +42,17 @@ def main():
     plt.yscale('log')
     plt.xlabel(r'Global Test Statistic ($t_{max}$)', fontsize=16)
     plt.ylabel('Probability Density', fontsize=16)
-    plt.title(f'Global Significance Comparison - Trigger {trigger.upper()}', fontsize=18)
+    plt.title(f'Global Test Statistic Distribution - Trigger {trigger.upper()}', fontsize=18)
     plt.legend(fontsize=11, frameon=False, loc='upper right')
 
+    # Automatically adjust subplot parameters to give specified padding
+    plt.tight_layout()
+
     out_filename = os.path.join(plot_dir, f"global_significance_impact_{trigger}.png")
-    plt.savefig(out_filename, dpi=300)
+    
+    # bbox_inches='tight' removes excess white space around the figure
+    # pad_inches controls the exact amount of padding left over
+    plt.savefig(out_filename, dpi=300, bbox_inches='tight', pad_inches=0.05)
     print(f"Plot successfully saved to {out_filename}.")
 
 if __name__ == "__main__":
