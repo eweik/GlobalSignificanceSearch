@@ -5,7 +5,7 @@ Developed for the Model Independent searches, it implements and compares three d
 
 ## Statistical Methods
 
-This framework handles the penalization of p-values when searching across multiple mass spectra (e.g., $M_{jj}, $M_{jb}$, $M_{bb}$) by modeling how these channels share events and fluctuate together.
+This framework handles the penalization of p-values when searching across multiple mass spectra (e.g., $M_{jj}$, $M_{jb}$, $M_{bb}$) by modeling how these channels share events and fluctuate together.
 
 1. **Naive (Independent Poisson):** Assumes zero correlation between channels. This is the most conservative approach, resulting in the highest trial factor penalization.
 2. **Linear Overlap:** Uses row-normalized overlap matrices to lock the fluctuations of exclusive channels to the inclusive $M_{jj}$ "hub." This accounts for the fact that many events in sub-channels are subsets of the dijet stream.
