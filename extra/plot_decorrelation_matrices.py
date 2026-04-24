@@ -80,13 +80,13 @@ def plot_decorrelation_matrices(mass_matrix, col_names, trigger_name, bounds, cm
     sns.heatmap(corr_raw, ax=axes[0], cmap=cmap, vmin=vmin, vmax=vmax,
                 xticklabels=col_names, yticklabels=col_names, 
                 annot=True, fmt=".2f", square=True, cbar_kws={"shrink": .8})
-    axes[0].set_title(f"Raw Data Correlation Matrix (In-Window) | {trigger_name}\n(Off-diagonals show true trigger overlaps)", fontsize=14)
+    axes[0].set_title(f"Raw Data Correlation Matrix | {trigger_name.upper()}\n(Off-diagonals show true trigger overlaps)", fontsize=14)
 
     # Plot Shuffled Matrix
     sns.heatmap(corr_shuffled, ax=axes[1], cmap=cmap, vmin=vmin, vmax=vmax,
                 xticklabels=col_names, yticklabels=col_names, 
                 annot=True, fmt=".2f", square=True, cbar_kws={"shrink": .8})
-    axes[1].set_title(f"Decorrelated Bootstrap Matrix (In-Window) | {trigger_name}\n(Correlation structure destroyed)", fontsize=14)
+    axes[1].set_title(f"Decorrelated/Shuffled Correlation Matrix | {trigger_name.upper()}\n(Correlation structure destroyed)", fontsize=14)
 
     plt.tight_layout()
     

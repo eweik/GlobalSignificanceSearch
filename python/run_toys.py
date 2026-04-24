@@ -24,7 +24,7 @@ def main(args):
     overlap_map = TRIGGER_OVERLAPS.get(args.trigger.lower(), TRIGGER_OVERLAPS["default"])
     
     # Load mass matrices early if needed for background OR toy generation
-    needs_mass_matrix = args.bkg == "matrix" or args.method in ["copula", "poisson_event", "exclusive_categories", "decorrelated_bootstrap"]
+    needs_mass_matrix = args.bkg == "matrix" or args.method in ["copula", "decorrelated_copula", "poisson_event", "exclusive_categories", "decorrelated_bootstrap"]
     mass_matrix_full, cols_mass = None, None
     if needs_mass_matrix:
         mass_path = os.path.join(base_dir, "data", f"masses_{args.trigger}.npz")
@@ -63,7 +63,7 @@ def main(args):
     # --- DATA LOADING & PREPARATION ---
     u_bounds = {}
     
-    if args.method == "copula":
+    if args.method in ["copula", "decorrelated_copula"]:
         copula_path = os.path.join(base_dir, "data", f"copula_{args.trigger}.npz")
         f = np.load(copula_path)
         matrix, col_names = f['copula'], list(f['columns'])
@@ -188,6 +188,39 @@ def main(args):
                 max_t = max(max_t, fast_bumphunter_stat(toy, b))
                 channels_searched += 1
 
+        elif args.method == "decorrelated_copula":
+            for m, b in bkg_expectations.items():
+                idx = col_names.index(f"M{m}")
+                # Isolate valid uniform ranks for this specific channel
+                valid_u_col = matrix[matrix[:, idx] >= 0, idx]
+                
+                # Draw independently to destroy inter-channel correlations
+                N_draw_m = np.random.poisson(len(valid_u_col))
+                
+                if N_draw_m == 0:
+                    toy = np.zeros(len(b), dtype=int)
+                else:
+                    u_raw = np.random.choice(valid_u_col, size=N_draw_m, replace=True)
+                    u_min, u_max = u_bounds[m]
+                    mask_in_window = (u_raw >= u_min) & (u_raw <= u_max)
+                    u_in_window = u_raw[mask_in_window]
+                    
+                    if len(u_in_window) == 0:
+                        toy = np.zeros(len(b), dtype=int)
+                    else:
+                        u_jittered = u_in_window + np.random.uniform(-0.0002, 0.0002, size=len(u_in_window))
+                        u_trunc = (u_jittered - u_min) / max(u_max - u_min, 1e-10)
+                        
+                        u_trunc = np.abs(u_trunc)
+                        u_trunc = np.where(u_trunc >= 1.0, 1.99999 - u_trunc, u_trunc)
+                        
+                        toy = np.bincount(np.searchsorted(cdfs[m], u_trunc), minlength=len(b))
+
+                if np.sum(toy) < 50: continue
+
+                max_t = max(max_t, fast_bumphunter_stat(toy, b))
+                channels_searched += 1
+
         elif args.method in ["poisson_event", "exclusive_categories", "decorrelated_bootstrap"]:
             if args.method == "decorrelated_bootstrap":
                 shuffled_matrix = np.copy(mass_matrix)
@@ -252,7 +285,7 @@ if __name__ == '__main__':
     p = ArgumentParser()
     p.add_argument('--trigger', required=True)
     p.add_argument('--toys', type=int, default=1000)
-    p.add_argument('--method', choices=["naive", "copula", "linear", "poisson_event", "exclusive_categories", "decorrelated_bootstrap"], required=True)
+    p.add_argument('--method', choices=["naive", "copula", "decorrelated_copula", "linear", "poisson_event", "exclusive_categories", "decorrelated_bootstrap"], required=True)
     p.add_argument('--cms', type=float, default=13000.)
     p.add_argument('-b', '--batch', action='store_true')
     p.add_argument('--chimax', type=float, default=2.0)

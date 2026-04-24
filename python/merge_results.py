@@ -11,7 +11,9 @@ def main(args):
     os.makedirs("plots", exist_ok=True)
     
     triggers = [f"t{i}" for i in range(1, 8)] if args.trigger == "all" else [args.trigger]
-    methods = ["naive", "linear", "copula", "poisson_event", "exclusive_categories", "decorrelated_bootstrap"]
+    methods = ["naive", "linear", "copula", "poisson_event",
+               "exclusive_categories", "decorrelated_bootstrap",
+               "decorrelated_copula"]
     
     # Standard 1-sided Z-score p-values
     # 1 sigma = 0.15865, 2 sigma = 0.02275, 3 sigma = 0.00135, 4 sigma = 3.167e-05
@@ -25,7 +27,7 @@ def main(args):
         plt.figure(figsize=(10, 6))
         colors = {"naive": "red", "linear": "blue", "copula": "orange", 
                   "poisson_event": "green", "exclusive_categories": "purple",
-                  "decorrelated_bootstrap": "olive"}
+                  "decorrelated_bootstrap": "olive", "decorrelated_copula": "pink"}
         
         for method in methods:
             # Find all chunked arrays for this trigger and method

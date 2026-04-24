@@ -7,18 +7,21 @@ Developed for the Model Independent searches, it implements and compares three d
 
 This framework handles the penalization of p-values when searching across multiple mass spectra (e.g., $M_{jj}, $M_{jb}$, $M_{bb}$) by modeling how these channels share events and fluctuate together.
 
-1. **Naive (Independent):** Assumes zero correlation between channels. This is the most conservative approach, resulting in the highest trial factor penalization.
-2. **Linear (Hub-and-Spoke):** Uses row-normalized overlap matrices to lock the fluctuations of exclusive channels to the inclusive $M_{jj}$ "hub." This accounts for the fact that many events in sub-channels are subsets of the dijet stream.
-3. **Empirical Copula (Migrated):** The most sophisticated method. It uses event-by-event rank dependencies to preserve exact kinematic correlations. It accurately models mass migration (e.g., energy loss in b-jets or detector resolution effects) by propagating fluctuations through an empirical CDF transformation.
+1. **Naive (Independent Poisson):** Assumes zero correlation between channels. This is the most conservative approach, resulting in the highest trial factor penalization.
+2. **Linear Overlap:** Uses row-normalized overlap matrices to lock the fluctuations of exclusive channels to the inclusive $M_{jj}$ "hub." This accounts for the fact that many events in sub-channels are subsets of the dijet stream.
+3. **Empirical Copula:** The most sophisticated method. It uses event-by-event rank dependencies to preserve exact kinematic correlations. It accurately models mass migration (e.g., energy loss in b-jets or detector resolution effects) by propagating fluctuations through an empirical CDF transformation.
+3. **Poisson (Event-Weight) Bootstrap:** FILL-IN
+
 
 ## Project Structure
 
 * **data/**: Pre-computed empirical copula matrices (*.npz)
 * **fits/**: JSON parameters for nominal and alternative fits
-* **results/**: Output directory for LEE toys (*.npy) and plots (*.png)
+* **results/**: Output directory for LEE toys (*.npy) 
 * **run/**: Bash scripts (Entry points for the pipeline, cluster submission, and merging)
 * **src/**: Core Python package (reusable logic)
-* **python/**: Execution scripts (Global LEE and visualization)
+* **python/**: Execution scripts (Create Numpy data files and Run Pseudoexperiments)
+* **extra/**: Visualization scripts (All plotting)
 
 ## Implementation Note: Fast BumpHunter
 
@@ -26,11 +29,12 @@ The `fast_bumphunter_stat` utility included in `src/stats.py` is a highly optimi
 
 ## Installation
 
-Ensure you have Python 3.8+ and the standard scientific stack (`numpy`, `scipy`, `matplotlib`) installed. 
+Ensure you have Python 3.8+ and the standard scientific stack (`numpy`, `scipy`, `matplotlib`) installed (with lsetup)
 
 ```bash
 git clone <repo-url>
 cd GlobalSignificanceSearch
+lsetup "views LCG_106 x86_64-el9-gcc13-opt"   # on lxplus for libraries
 chmod +x run/*.sh
 ```
 
@@ -39,13 +43,17 @@ chmod +x run/*.sh
 The `run/` directory contains all necessary bash scripts to execute the workflow locally or on the HTCondor cluster.
 But run code from the `GlobalSignificanceSearch` directory, not the `run` directory.
 
-### 1. Extracting Empirical Copula
+### 1. Extracting Empirical Copula and Masses
 Before generating toys using the Copula method, the rank-order matrix must be extracted from the ATLAS ROOT ntuple.
+For AD Analysis, ROOT ntuples must be created with `analysis_root_chunky.py` with `save_tree=True` enabled. 
 
 ```bash
 ./run/run_extract_copular.sh /path/to/input/root/file /path/to/output/file/
+./run/run_extract_masses.sh /path/to/input/root/file /path/to/output/file/
+
 ```
-* **Process:** This parses the events and maps their percentile ranks across all invariant mass definitions, saving the output to `data/copula_t1.npz`.
+* **Process:** This parses the events and maps their percentile ranks across all invariant mass definitions, saving the output to `data/copula_t1.npz`, for Copula toys.
+
 
 ### 2. Global Significance (LEE) Toys (Local Run)
 To calculate the global test statistic distribution and account for the Look-Elsewhere Effect (LEE) locally:
@@ -53,7 +61,7 @@ To calculate the global test statistic distribution and account for the Look-Els
 ```bash
 ./run/run_all_toys.sh --trigger t1 --toys 100 --cms 13600.0
 ```
-* **Process:** Generates local test statistic distributions using the Naive, Linear, and Copula methods.
+* **Process:** Generates local test statistic distributions using the Naive, Linear, Copula, and Poisson-Bootstrap methods.
 * **Storage:** Data is stored in the `results/` directory as `.npy` files.
 
 ### 3. Visualizing Background Pseudo-Experiments (Method Comparison)

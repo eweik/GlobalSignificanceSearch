@@ -68,14 +68,15 @@ def main():
 
     # For a single channel, we only compare Naive vs Bootstrap
     methods = {
-        "naive": {"color": "red", "label": "Naive (Independent Poisson)"},
-        "poisson_bootstrap": {"color": "blue", "label": "Poisson Bootstrap (Data Resampled)"}
+        "naive": {"color": "red", "label": "Independent Poisson"},
+        "copula": {"color": "green", "label": "Empirical Copula"},
+        "poisson_bootstrap": {"color": "blue", "label": "Poisson Bootstrap"}
     }
                 
     plt.figure(figsize=(10, 7))
 
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    results_dir = os.path.join(base_dir, "results")
+    results_dir = os.path.join(base_dir, "results/merged_single")
     plot_dir = os.path.join(base_dir, "plots")
     os.makedirs(results_dir, exist_ok=True)
     os.makedirs(plot_dir, exist_ok=True)
@@ -97,14 +98,14 @@ def main():
                  label=f"{settings['label']}",
                  color=settings['color'], linewidth=2.5, density=True)
 
-    if t_obs > 0:
-        plt.axvline(t_obs, color='black', linestyle='--', linewidth=2.5, 
-                    label=rf'Observed Data ($t_{{obs}} = {t_obs:.1f}$)')
+    # if t_obs > 0:
+    #     plt.axvline(t_obs, color='black', linestyle='--', linewidth=2.5, 
+    #                 label=rf'Observed Data ($t_{{obs}} = {t_obs:.1f}$)')
 
     plt.yscale('log')
-    plt.xlabel(r'Test Statistic ($t_{max}$)', fontsize=16)
-    plt.ylabel('Probability Density', fontsize=16)
-    plt.title(f'Single Channel Toy Distributions vs Observation - {trigger.upper()} {channel.upper()}', fontsize=16)
+    plt.xlabel(r'Max Local Interval Test Statistic ($t_{max}$)', fontsize=18)
+    plt.ylabel('Probability Density', fontsize=18)
+    plt.title(f'Single Channel Toy Distributions vs Observation - {trigger.upper()} {channel.upper()}', fontsize=20)
     
     plt.legend(fontsize=11, frameon=True, loc='upper right')
 

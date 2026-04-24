@@ -18,10 +18,11 @@ def main():
     channel = args.channel.lower()
 
     # Only plotting the two relevant methods for a single channel
-    methods = ["naive", "poisson_bootstrap"]
-    colors = {"naive": "red", "poisson_bootstrap": "blue"}
-    method_label_map = {"naive": "Naive (Independent Poisson)", 
-                        "poisson_bootstrap": "Poisson Bootstrap (Data Resampled)"}
+    methods = ["naive", "poisson_bootstrap", "copula"]
+    colors = {"naive": "red", "poisson_bootstrap": "blue", "copula": "green"}
+    method_label_map = {"naive": "Independent Poisson", 
+                        "poisson_bootstrap": "Poisson Bootstrap",
+                        "copula": "Empirical Copula"}
 
     os.makedirs("plots", exist_ok=True)
 
@@ -32,7 +33,7 @@ def main():
     plt.figure(figsize=(10, 6))
 
     for method in methods:
-        file_pattern = f"results/single_stat_{trigger}_{channel}_{method}.npy"
+        file_pattern = f"results/merged_single/single_stat_{trigger}_{channel}_{method}.npy"
         file_list = glob.glob(file_pattern)
         
         if not file_list:
@@ -79,15 +80,15 @@ def main():
         plt.plot(z_local_sorted[valid], z_global_curve[valid],
                  label=f"{label_name} (N={MaxEvents})", color=colors.get(method, "black"), lw=2)
 
-    plt.title(f"Histogram-Wide Significance vs. Local Significance\n{trigger.upper()} | Channel: {channel.upper()}", fontsize=14)
-    plt.xlabel("Highest Observed BumpHunter Significance in Histogram ($Z_{local}$)", fontsize=12)
-    plt.ylabel("Histogram-Wide Significance ($Z_{hist-wide}$)", fontsize=12)
+    plt.title(f"Histogram-Wide Significance vs. Local Significance\n{trigger.upper()} | Channel: {channel.upper()}", fontsize=20)
+    plt.xlabel("Highest Observed Local Significance in Histogram ($Z_{local}$)", fontsize=18)
+    plt.ylabel("Histogram-Wide Significance ($Z_{hist}$)", fontsize=18)
     
     plt.axhline(3, color='grey', linestyle='--', alpha=0.7, label='3σ Evidence')
     plt.axhline(5, color='black', linestyle=':', alpha=0.7, label='5σ Discovery')
 
     lims = [max(0, plt.xlim()[0]), min(8, plt.xlim()[1])]
-    plt.plot(lims, lims, 'k--', alpha=0.3, label="No LEE ($Z_{hist-wide} = Z_{local}$)")
+    plt.plot(lims, lims, 'k--', alpha=0.3, label="No LEE ($Z_{histogram} = Z_{local}$)")
 
     plt.legend(loc="lower right")
     plt.grid(True, which="both", linestyle="--", alpha=0.5)
