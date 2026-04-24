@@ -10,18 +10,38 @@ This framework handles the penalization of p-values when searching across multip
 1. **Naive (Independent Poisson):** Assumes zero correlation between channels. This is the most conservative approach, resulting in the highest trial factor penalization.
 2. **Linear Overlap:** Uses row-normalized overlap matrices to lock the fluctuations of exclusive channels to the inclusive $M_{jj}$ "hub." This accounts for the fact that many events in sub-channels are subsets of the dijet stream.
 3. **Empirical Copula:** The most sophisticated method. It uses event-by-event rank dependencies to preserve exact kinematic correlations. It accurately models mass migration (e.g., energy loss in b-jets or detector resolution effects) by propagating fluctuations through an empirical CDF transformation.
-3. **Poisson (Event-Weight) Bootstrap:** FILL-IN
+4. **Poisson (Event-Weight) Bootstrap:**  Uses the data itself to generate pseudo-experiments by assigning each event a weight drawn from a Poisson distribution with $\lambda=1$. This method naturally preserves the exact kinematic correlations, overlaps, and physical boundary limits of the actual data without requiring complex analytical modeling.
 
 
 ## Project Structure
 
+### Core Directories
 * **data/**: Pre-computed empirical copula matrices (*.npz)
 * **fits/**: JSON parameters for nominal and alternative fits
 * **results/**: Output directory for LEE toys (*.npy) 
 * **run/**: Bash scripts (Entry points for the pipeline, cluster submission, and merging)
 * **src/**: Core Python package (reusable logic)
-* **python/**: Execution scripts (Create Numpy data files and Run Pseudoexperiments)
-* **extra/**: Visualization scripts (All plotting)
+
+### **`python/`** (Execution Scripts)
+Contains the primary Python scripts for data processing and pseudo-experiment generation.
+* `extract_copula.py`: Parses ROOT ntuples to extract rank-order matrices and saves empirical copula data.
+* `extract_masses.py`: Extracts invariant mass distributions for all defined channels.
+* `run_toys.py`: Main script for generating the multi-channel pseudo-experiments.
+* `run_single_mass_toys.py`: Generates toys restricted to a single mass definition.
+* `merge_results.py`: Combines individual `.npy` outputs from cluster jobs into unified arrays.
+
+### **`run/`** (Shell Wrappers & Cluster Submission)
+Bash scripts serving as entry points for local execution and HTCondor cluster submission. 
+Always run these from the `GlobalSignificanceSearch` directory.
+* **HTCondor Submission**
+    * `submit_all.sh` / `submit_all_triggers.sh`: Scripts to batch-submit toy generation jobs.
+    * `submit_toys.sub`: HTCondor job configuration requirements.
+    * `condor_wrapper.sh`: Sets up the LCG environment on worker nodes before execution.
+* **Local Wrappers**: `run_all_toys.sh`, `run_comparison_plot.sh`, `run_extract_copular.sh`, `run_extract_masses.sh`, `run_injection.sh`, `run_plot_9panel_grid.sh`, `run_plot_diagnostics.sh`, `run_absorption_scan.sh`
+
+
+### **`extra/`** (Visualizations & Diagnostics)
+A comprehensive suite of scripts dedicated strictly to plotting results, generating grids, and visualizing correlation metrics.
 
 ## Implementation Note: Fast BumpHunter
 
@@ -41,7 +61,7 @@ chmod +x run/*.sh
 ## Usage
 
 The `run/` directory contains all necessary bash scripts to execute the workflow locally or on the HTCondor cluster.
-But run code from the `GlobalSignificanceSearch` directory, not the `run` directory.
+*Important: Run all scripts from the main `GlobalSignificanceSearch` directory, not from within the `run` directory.*
 
 ### 1. Extracting Empirical Copula and Masses
 Before generating toys using the Copula method, the rank-order matrix must be extracted from the ATLAS ROOT ntuple.
@@ -62,36 +82,12 @@ To calculate the global test statistic distribution and account for the Look-Els
 ./run/run_all_toys.sh --trigger t1 --toys 100 --cms 13600.0
 ```
 * **Process:** Generates local test statistic distributions using the Naive, Linear, Copula, and Poisson-Bootstrap methods.
-* **Storage:** Data is stored in the `results/` directory as `.npy` files.
+* **Storage:** Data (BumpHunter test statistic) is stored in the `results/` directory as `.npy` files.
 
-### 3. Visualizing Background Pseudo-Experiments (Method Comparison)
-To generate a single synchronized pseudo-experiment across all 9 mass channels and visualize how the Naive, Linear, and Copula methods physically model background fluctuations:
 
-```bash
-# Format: ./run/run_comparison_plot.sh <trigger> [--hunt]
-./run/run_comparison_plot.sh t1
-```
-* **Process:** Overlays the Poisson toys from all three methods on top of the analytic background fits. Also calculates and displays the local BumpHunter Z-score for each toy.
-* **Hunt Mode:** Append `--hunt` to continuously generate random universes until the Copula method yields a $>5\sigma$ anomaly. This is highly useful for visually diagnosing boundary effects and clumping artifacts in low-statistics triggers.
-* **Output:** Saves a 9-panel grid to `plots/method_comparison_<trigger>.png`
-
-### 4. Signal Injection Visualization
-To visually verify the physical "migration" of a Gaussian signal peak from the inclusive hub into exclusive sub-channels via the empirical copula:
-
-```bash
-./run/run_injection.sh --trigger t1 --mass 2000 --width 80 --events 5000
-```
-* **Process:** Injects a hypothetical signal into the $M_{jj}$ distribution and maps the corresponding events into $M_{jb}$, $M_{bb}$, etc.
-* **Output:** Plots showing the source spike and the resulting migrated peaks are saved to the `results/` directory as `.png` files.
-
-To see all 9 mass channels in a panel-grid figure:
-```
-# Example: Injecting a 2000 GeV signal into the M_jj distribution
-./run/run_plot_9panel_grid.sh --trigger t1 --mass 2000 --width 80 --events 5000
-```
-
-### 5. HTCondor Mass Production
-To generate the massive toy datasets required for discovery-level significance, submit the jobs to the HTCondor cluster. The submission scripts rely on `submit_toys.sub` for the job requirements and `condor_wrapper.sh` to set up the LCG environment on the worker nodes.
+### 3. HTCondor Mass Production
+To generate the massive toy datasets required for discovery-level significance, submit the jobs to the HTCondor cluster. The submission scripts rely on `submit_toys.sub` for the job requirements and `condor_wrapper.sh` to set up the LCG environment on the worker nodes. 
+Saves BumpHunter test statistic for each pseudo-experiment into `.npy` files.
 
 **To submit jobs for a single trigger:**
 ```bash
@@ -105,7 +101,8 @@ To generate the massive toy datasets required for discovery-level significance, 
 ./run/submit_all_triggers.sh 100000 1000
 ```
 
-### 6. Merging Cluster Results
+
+### 4. Merging Cluster Results
 Once all HTCondor jobs have finished, merge the thousands of individual `.npy` outputs into single arrays for the final global significance calculation.
 
 ```bash
@@ -114,10 +111,10 @@ Once all HTCondor jobs have finished, merge the thousands of individual `.npy` o
 * **Process:** Scans the `results/` directory, concatenates all valid arrays, and outputs the final merged files (e.g., `final_t1_linear.npy`).
 
 
-### 7. Visualizing the Survival Curve (Global vs. Local Z)
+### 5. Visualizing the Significance Curve (Global vs. Local Z)
 Once all trigger results are merged, generate the final Trigger-Level Global Significance plot to compare the Look-Elsewhere Effect (LEE) penalty across methods.
 ```bash
-python python/local_to_global_z.py --trigger "t1"
+python python/localZ_to_global_z.py --trigger <t2>  # plot Trigger Level Significance Curve
 ```
 * **Process** This script loads the merged `.npy` files from the input trigger, calculates the p-values, and maps them to global Z-scores using the normal survival function.
 * **Output** Generates the master "Survival Curve" plot (e.g., `plots/Local_vs_Global_{trigger}.png`), visually demonstrating how the Linear method safely recovers global significance compared to the Naive baseline.
@@ -127,6 +124,6 @@ To see the Analysis-Level Global Significance plot:
 python python/analysis_global_lee.py 
 ```
 * **Process** This script loads the merged `.npy` files across all triggers, calculates the global p-values, and maps them to global Z-scores using the normal survival function.
-* **Output** Generates the master "Survival Curve" plot (e.g., `plots/Experiment_Wide_Global_Z.png`), visually demonstrating how the Linear method safely recovers global significance compared to the Naive baseline.
+* **Output** Generates the master "Survival Curve" plot (e.g., `plots/Analysis_Wide_Global_Z.png`), visually demonstrating how the different methods recovers global significance compared to the Independent Poisson baseline.
 
 
