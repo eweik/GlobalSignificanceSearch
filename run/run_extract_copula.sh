@@ -14,8 +14,7 @@ for i in {1..7}; do
 
     if [ -f "$INPUT_FILE" ]; then
         echo "--> Extracting Copula for T${i}..."
-        # python python/extract_copula.py "$INPUT_FILE" "$OUTPUT_FILE" --trigger "$TRIGGER_NAME"
-        python python/extract_copula2.py "$INPUT_FILE" "$OUTPUT_FILE"
+        python python/extract_copula.py "$INPUT_FILE" "$OUTPUT_FILE"
     else
         echo "--> Warning: $INPUT_FILE not found. Skipping T${i}."
     fi

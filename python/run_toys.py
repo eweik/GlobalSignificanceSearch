@@ -91,40 +91,32 @@ def main(args):
             
             u_bounds[m] = (u_min, u_max)
 
-        # Compute Window-Restricted Covariance Matrix for Parametric Copulas
+        # ---------------------------------------------------------
+        # Compute Global Covariance Matrix for Parametric Copulas
+        # ---------------------------------------------------------
         if args.method in ["gaussian_copula", "student_t_copula"]:
-            print("Computing pairwise rank correlation matrix exclusively inside fit windows...")
+            print("Computing global pairwise rank correlation matrix...")
 
-            # Initialize an empty matrix of NaNs
-            windowed_matrix = np.full_like(matrix, np.nan, dtype=float)
-
-            # Populate only with values that fall inside the [u_min, u_max] window
-            for m in bkg_expectations.keys():
-                idx = col_names.index(f"M{m}")
-                u_min, u_max = u_bounds[m]
-
-                # Mask: Event exists (>=0) AND rank is within the fit window
-                valid_mask = (matrix[:, idx] >= 0) & (matrix[:, idx] >= u_min) & (matrix[:, idx] <= u_max)
-                windowed_matrix[valid_mask, idx] = matrix[valid_mask, idx]
-
-            # Convert to DataFrame for easy pairwise correlation ignoring NaNs
-            df_ranks = pd.DataFrame(windowed_matrix)
+            # Convert missing topological flags (< 0) to NaN for pandas.
+            # We explicitly use the global matrix to capture the true physical correlation.
+            df_ranks = pd.DataFrame(np.where(matrix >= 0, matrix, np.nan))
+            
             rho_matrix = df_ranks.corr(method='spearman').fillna(0).values
+            
             # Map Spearman's rho to Gaussian Pearson correlation matrix
             cov_matrix = 2 * np.sin(rho_matrix * np.pi / 6)
 
             # Ensure the matrix is Positive Semi-Definite (PSD)
             eigvals, eigvecs = np.linalg.eigh(cov_matrix)
             if np.any(eigvals < 0):
-                warnings.warn("Covariance matrix not strictly PSD (due to pairwise window masking). Projecting to PSD.")
-                # Clip negative eigenvalues
+                warnings.warn("Covariance matrix not strictly PSD (likely due to disjoint topologies). Projecting to PSD.")
                 eigvals[eigvals < 0] = 1e-8
                 cov_matrix = eigvecs.dot(np.diag(eigvals)).dot(eigvecs.T)
-                # Re-normalize to ensure diagonal is exactly 1.0
                 d = np.diag(1.0 / np.sqrt(np.diag(cov_matrix)))
                 cov_matrix = d.dot(cov_matrix).dot(d)
 
             global_cov_matrix = cov_matrix
+        # ---------------------------------------------------------
 
     elif args.method in ["poisson_event", "exclusive_categories", "decorrelated_bootstrap"]:
         mass_matrix, col_names = mass_matrix_full, cols_mass
@@ -272,11 +264,8 @@ def main(args):
                 U_parametric = norm.cdf(Z)
 
             elif args.method == "student_t_copula":
-                # Sample Multivariate Normal
                 Z = np.random.multivariate_normal(np.zeros(len(col_names)), global_cov_matrix, size=N_draw)
-                # Sample Chi-Square for the denominator
                 S = chi2.rvs(args.nu, size=N_draw)
-                # Construct T and map back to uniform using t-CDF
                 T = Z * np.sqrt(args.nu / S[:, None])
                 U_parametric = student_t.cdf(T, df=args.nu)
 
@@ -288,14 +277,14 @@ def main(args):
                 u_raw = U_parametric[sampled_mask[:, idx], idx]
 
                 u_min, u_max = u_bounds[m]
+                
+                # Here is the magic filter: throws away 90% of the toys naturally!
                 mask_in_window = (u_raw >= u_min) & (u_raw <= u_max)
                 u_in_window = u_raw[mask_in_window]
 
                 if len(u_in_window) == 0:
                     toy = np.zeros(len(b), dtype=int)
                 else:
-                    # Optional: Parametric uniforms shouldn't need jittering because they are perfectly continuous,
-                    # but keeping it doesn't hurt and matches your empirical setup.
                     u_jittered = u_in_window + np.random.uniform(-0.0002, 0.0002, size=len(u_in_window))
                     u_trunc = (u_jittered - u_min) / max(u_max - u_min, 1e-10)
 
