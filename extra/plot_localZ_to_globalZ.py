@@ -23,9 +23,9 @@ def main():
 
     # Included Copula as it's typically compared against these
     # methods = ["naive", "copula", "poisson_event",  "decorrelated_bootstrap", "decorrelated_copula"]
-    # methods = ["naive"]
+    methods = ["copula"]
     # methods = ["naive", "poisson_event", "copula"]
-    methods = ["naive", "poisson_event"]
+    # methods = ["naive", "poisson_event"]
     colors = {"naive": "red", "linear": "blue", "copula": "green",
               "poisson_event": "blue", "decorrelated_copula": "purple",
               "decorrelated_bootstrap": "olive"}

@@ -6,6 +6,10 @@ import time
 import numpy as np
 from argparse import ArgumentParser
 
+from scipy.stats import norm, t as student_t, chi2
+import pandas as pd
+import warnings
+
 current_script_dir = os.path.dirname(os.path.abspath(__file__))
 repo_root = os.path.dirname(current_script_dir)
 if repo_root not in sys.path: sys.path.append(repo_root)
@@ -63,7 +67,7 @@ def main(args):
     # --- DATA LOADING & PREPARATION ---
     u_bounds = {}
     
-    if args.method in ["copula", "decorrelated_copula"]:
+    if args.method in ["copula", "decorrelated_copula", "gaussian_copula", "student_t_copula"]:
         copula_path = os.path.join(base_dir, "data", f"copula_{args.trigger}.npz")
         f = np.load(copula_path)
         matrix, col_names = f['copula'], list(f['columns'])
@@ -86,6 +90,41 @@ def main(args):
                 u_min, u_max = 0.0, 1.0
             
             u_bounds[m] = (u_min, u_max)
+
+        # Compute Window-Restricted Covariance Matrix for Parametric Copulas
+        if args.method in ["gaussian_copula", "student_t_copula"]:
+            print("Computing pairwise rank correlation matrix exclusively inside fit windows...")
+
+            # Initialize an empty matrix of NaNs
+            windowed_matrix = np.full_like(matrix, np.nan, dtype=float)
+
+            # Populate only with values that fall inside the [u_min, u_max] window
+            for m in bkg_expectations.keys():
+                idx = col_names.index(f"M{m}")
+                u_min, u_max = u_bounds[m]
+
+                # Mask: Event exists (>=0) AND rank is within the fit window
+                valid_mask = (matrix[:, idx] >= 0) & (matrix[:, idx] >= u_min) & (matrix[:, idx] <= u_max)
+                windowed_matrix[valid_mask, idx] = matrix[valid_mask, idx]
+
+            # Convert to DataFrame for easy pairwise correlation ignoring NaNs
+            df_ranks = pd.DataFrame(windowed_matrix)
+            rho_matrix = df_ranks.corr(method='spearman').fillna(0).values
+            # Map Spearman's rho to Gaussian Pearson correlation matrix
+            cov_matrix = 2 * np.sin(rho_matrix * np.pi / 6)
+
+            # Ensure the matrix is Positive Semi-Definite (PSD)
+            eigvals, eigvecs = np.linalg.eigh(cov_matrix)
+            if np.any(eigvals < 0):
+                warnings.warn("Covariance matrix not strictly PSD (due to pairwise window masking). Projecting to PSD.")
+                # Clip negative eigenvalues
+                eigvals[eigvals < 0] = 1e-8
+                cov_matrix = eigvecs.dot(np.diag(eigvals)).dot(eigvecs.T)
+                # Re-normalize to ensure diagonal is exactly 1.0
+                d = np.diag(1.0 / np.sqrt(np.diag(cov_matrix)))
+                cov_matrix = d.dot(cov_matrix).dot(d)
+
+            global_cov_matrix = cov_matrix
 
     elif args.method in ["poisson_event", "exclusive_categories", "decorrelated_bootstrap"]:
         mass_matrix, col_names = mass_matrix_full, cols_mass
@@ -221,6 +260,55 @@ def main(args):
                 max_t = max(max_t, fast_bumphunter_stat(toy, b))
                 channels_searched += 1
 
+        elif args.method in ["gaussian_copula", "student_t_copula"]:
+            N_draw = np.random.poisson(len(matrix))
+
+            # 1. Draw event topology from empirical data (Which channels exist in these events?)
+            sampled_mask = matrix[np.random.choice(len(matrix), size=N_draw, replace=True)] >= 0
+
+            # 2. Draw continuous variables from parametric copula
+            if args.method == "gaussian_copula":
+                Z = np.random.multivariate_normal(np.zeros(len(col_names)), global_cov_matrix, size=N_draw)
+                U_parametric = norm.cdf(Z)
+
+            elif args.method == "student_t_copula":
+                # Sample Multivariate Normal
+                Z = np.random.multivariate_normal(np.zeros(len(col_names)), global_cov_matrix, size=N_draw)
+                # Sample Chi-Square for the denominator
+                S = chi2.rvs(args.nu, size=N_draw)
+                # Construct T and map back to uniform using t-CDF
+                T = Z * np.sqrt(args.nu / S[:, None])
+                U_parametric = student_t.cdf(T, df=args.nu)
+
+            # 3. Apply the limits and map to physical background expectations
+            for m, b in bkg_expectations.items():
+                idx = col_names.index(f"M{m}")
+
+                # Keep only values where the physical topology dictates this mass should exist
+                u_raw = U_parametric[sampled_mask[:, idx], idx]
+
+                u_min, u_max = u_bounds[m]
+                mask_in_window = (u_raw >= u_min) & (u_raw <= u_max)
+                u_in_window = u_raw[mask_in_window]
+
+                if len(u_in_window) == 0:
+                    toy = np.zeros(len(b), dtype=int)
+                else:
+                    # Optional: Parametric uniforms shouldn't need jittering because they are perfectly continuous,
+                    # but keeping it doesn't hurt and matches your empirical setup.
+                    u_jittered = u_in_window + np.random.uniform(-0.0002, 0.0002, size=len(u_in_window))
+                    u_trunc = (u_jittered - u_min) / max(u_max - u_min, 1e-10)
+
+                    u_trunc = np.abs(u_trunc)
+                    u_trunc = np.where(u_trunc >= 1.0, 1.99999 - u_trunc, u_trunc)
+
+                    toy = np.bincount(np.searchsorted(cdfs[m], u_trunc), minlength=len(b))
+
+                if np.sum(toy) < 50: continue
+
+                max_t = max(max_t, fast_bumphunter_stat(toy, b))
+                channels_searched += 1
+
         elif args.method in ["poisson_event", "exclusive_categories", "decorrelated_bootstrap"]:
             if args.method == "decorrelated_bootstrap":
                 shuffled_matrix = np.copy(mass_matrix)
@@ -285,7 +373,10 @@ if __name__ == '__main__':
     p = ArgumentParser()
     p.add_argument('--trigger', required=True)
     p.add_argument('--toys', type=int, default=1000)
-    p.add_argument('--method', choices=["naive", "copula", "decorrelated_copula", "linear", "poisson_event", "exclusive_categories", "decorrelated_bootstrap"], required=True)
+    p.add_argument('--method', choices=["naive", "copula", "decorrelated_copula", "linear",
+                                        "poisson_event", "exclusive_categories", "decorrelated_bootstrap",
+                                        "gaussian_copula", "student_t_copula"], required=True)
+    p.add_argument('--nu', type=float, default=5.0, help="Degrees of freedom for Student-t copula")
     p.add_argument('--cms', type=float, default=13000.)
     p.add_argument('-b', '--batch', action='store_true')
     p.add_argument('--chimax', type=float, default=2.0)

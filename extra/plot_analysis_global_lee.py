@@ -17,11 +17,12 @@ def main():
     colors = {"naive": "red", "linear": "blue"}
     methods = ["naive", "copula", "poisson_event", "decorrelated_bootstrap"]
     methods = ["naive", "poisson_event", "decorrelated_bootstrap"]
+    methods = ["copula"]
     # colors = {"naive": "red", "copula": "green", "poisson_event": "blue", "decorrelated_bootstrap": "olive"}
-    colors = {"naive": "red", "linear": "blue", "copula": "orange",
-              "poisson_event": "green", "exclusive_categories": "purple",
+    colors = {"naive": "red", "linear": "blue", "copula": "green",
+              "poisson_event": "blue", "decorrelated_copula": "purple",
               "decorrelated_bootstrap": "olive"}
-    method_label_map = {"naive": "Independent", "linear": "Overlap", "copula": "Copula",
+    method_label_map = {"naive": "Independent", "linear": "Overlap", "copula": "Empirical Copula",
                         "poisson_event": "Poisson Bootstrap", "decorrelated_bootstrap": "Decorrelated Bootstrap"}
 
     
@@ -95,22 +96,22 @@ def main():
                  label=f"{method_label} (N={min_toys})", color=colors[method], lw=2)
 
     # 7. Format the Plot
-    # plt.title("Analysis-Wide Global Significance vs. BumpHunter Significance | 5-param Background", fontsize=14)
-    plt.title("Analysis-Wide Global Significance vs. BumpHunter Significance | Bin-count Background", fontsize=14)
-    plt.xlabel("Highest Observed Local Significance Across All Triggers ($Z_{BH}$)", fontsize=12)
+    plt.title("Analysis-Wide Global Significance vs. Local Significance | 5-param Background", fontsize=14)
+    # plt.title("Analysis-Wide Global Significance vs. Local Significance | Bin-count Background", fontsize=14)
+    plt.xlabel("Highest Observed Local Significance Across All Windows ($Z_{local}$)", fontsize=12)
     plt.ylabel("Analysis-Wide Global Significance ($Z_{global}$)", fontsize=12)
     
     plt.axhline(3, color='grey', linestyle='--', alpha=0.7, label='3σ Global Evidence')
     plt.axhline(5, color='black', linestyle=':', alpha=0.7, label='5σ Global Discovery')
     
     lims = [max(0, plt.xlim()[0]), min(8, plt.xlim()[1])]
-    plt.plot(lims, lims, 'k--', alpha=0.3, label="No LEE ($Z_{global} = Z_{BH}$)")
+    plt.plot(lims, lims, 'k--', alpha=0.3, label="No LEE ($Z_{global} = Z_{local}$)")
 
     plt.legend(loc="lower right")
     plt.grid(True, which="both", linestyle="--", alpha=0.5)
     plt.tight_layout()
     
-    plot_out = "plots/Analysis_Wide_Global_Z_bin.png"
+    plot_out = "plots/Analysis_Wide_Global_Z_copula.png"
     plt.savefig(plot_out, dpi=300)
     print(f"\n{'-'*65}\nMaster plot saved to {plot_out}\n")
 
