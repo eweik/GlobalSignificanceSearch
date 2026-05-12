@@ -23,15 +23,17 @@ def main():
 
     # Included Copula as it's typically compared against these
     # methods = ["naive", "copula", "poisson_event",  "decorrelated_bootstrap", "decorrelated_copula"]
-    methods = ["copula"]
+    methods = ["copula", "naive", "gaussian_copula", "student_t_copula"]
     # methods = ["naive", "poisson_event", "copula"]
     # methods = ["naive", "poisson_event"]
     colors = {"naive": "red", "linear": "blue", "copula": "green",
               "poisson_event": "blue", "decorrelated_copula": "purple",
-              "decorrelated_bootstrap": "olive"}
+              "decorrelated_bootstrap": "olive", "gaussian_copula": "rebeccapurple", 
+              "student_t_copula": "lightcoral"}
     method_label_map = {"naive": "Independent", "linear": "Overlap", "copula": "Empirical Copula",
                         "poisson_event": "Poisson Bootstrap", "decorrelated_bootstrap": "Decorrelated Bootstrap",
-                        "decorrelated_copula": "Decorrelated Copula"}
+                        "decorrelated_copula": "Decorrelated Copula", "gaussian_copula": "Gaussian Copula",
+                        "student_t_copula": "Student-t Copula"}
 
     os.makedirs("plots", exist_ok=True)
 
@@ -52,8 +54,8 @@ def main():
             file_list = glob.glob(f"results/merged/final_{trigger}_{method}_{bkg_tag}.npy")
             if not file_list:
                 # Absolute fallback to legacy naming if tags aren't found
-                # file_list = glob.glob(f"results/merged_5param/final_{trigger}_{method}.npy")
-                file_list = glob.glob(f"results/merged_bin/final_{trigger}_{method}.npy")
+                file_list = glob.glob(f"results/merged_5param/final_{trigger}_{method}.npy")
+                # file_list = glob.glob(f"results/merged_bin/final_{trigger}_{method}.npy")
                 if not file_list:
                     print(f"Warning: No data found for {method} with tag {bkg_tag}. Skipping.")
                     continue
@@ -107,8 +109,8 @@ def main():
 
     # 6. Format the Plot
     bkg_display = "5-param" if args.bkg == "func" else "Raw Bin Counts"
-    plt.title(f"Trigger-Wide Global Significance vs. BumpHunter Significance\n{trigger.upper()} | {bkg_display} Background", fontsize=20)
-    plt.xlabel("Highest Observed BumpHunter Significance Across All Mass Channels ($Z_{BH}$)", fontsize=16)
+    plt.title(f"Trigger-Wide Global Significance vs. Local Significance\n{trigger.upper()} | {bkg_display} Background", fontsize=20)
+    plt.xlabel("Highest Observed Local Significance Across All Mass Channels ($Z_{local}$)", fontsize=16)
     plt.ylabel("Global Significance ($Z_{global}$)", fontsize=16)
     
     # Add standard discovery thresholds
