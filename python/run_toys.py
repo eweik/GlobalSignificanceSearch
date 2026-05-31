@@ -28,7 +28,7 @@ def main(args):
     overlap_map = TRIGGER_OVERLAPS.get(args.trigger.lower(), TRIGGER_OVERLAPS["default"])
     
     # Load mass matrices early if needed for background OR toy generation
-    needs_mass_matrix = args.bkg == "matrix" or args.method in ["copula", "decorrelated_copula", "poisson_event", "exclusive_categories", "decorrelated_bootstrap"]
+    needs_mass_matrix = (args.bkg == "matrix") or args.method in ["poisson_event", "exclusive_categories", "decorrelated_bootstrap"] or ("copula" in args.method)
     mass_matrix_full, cols_mass = None, None
     if needs_mass_matrix:
         mass_path = os.path.join(base_dir, "data", f"masses_{args.trigger}.npz")
@@ -370,5 +370,5 @@ if __name__ == '__main__':
     p.add_argument('-b', '--batch', action='store_true')
     p.add_argument('--chimax', type=float, default=2.0)
     p.add_argument('--jobid', type=str, default="local")
-    p.add_argument('--bkg', choices=['func', 'matrix'], default='matrix', help="Choose to use 5-param function or nominal bin counts from mass matrices")
+    p.add_argument('--bkg', choices=['func', 'matrix'], default='func', help="Choose to use 5-param function or nominal bin counts from mass matrices")
     main(p.parse_args())

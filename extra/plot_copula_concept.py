@@ -92,7 +92,8 @@ def main():
     
     # Panel 1: Raw Data (Crimson)
     axes[0].scatter(m1_raw, m2_raw, color='#d62728', s=12, alpha=0.3, edgecolors='none')
-    axes[0].set_title("1. Raw Data Space\n(Empirical Mass Distributions)", fontsize=16, fontweight='bold', pad=15)
+    # axes[0].set_title("1. Raw Data Space\n(Empirical Mass Distributions)", fontsize=16, fontweight='bold', pad=15)
+    axes[0].set_title("1. Data Space", fontsize=16, fontweight='bold', pad=15)
     axes[0].set_xlabel(label_ch1, fontsize=14)
     axes[0].set_ylabel(label_ch2, fontsize=14)
     axes[0].set_xlim(fmin1, fmax1); axes[0].set_ylim(fmin2, fmax2)
@@ -111,7 +112,8 @@ def main():
     h = axes[2].hist2d(m1_toy, m2_toy, bins=[bins1, bins2], cmap="YlOrBr", norm=LogNorm(vmin=1))
     cbar = fig.colorbar(h[3], ax=axes[2], fraction=0.046, pad=0.04)
     cbar.set_label('Copula Toy Count', rotation=270, labelpad=20, fontsize=12)
-    axes[2].set_title("3. Binned Copula Model\n(Smooth Fit + Discrete Mapping)", fontsize=16, fontweight='bold', pad=15)
+    # axes[2].set_title("3. Binned Copula Model\n(Smooth Fit + Discrete Mapping)", fontsize=16, fontweight='bold', pad=15)
+    axes[2].set_title("3. Null Model", fontsize=16, fontweight='bold', pad=15)
     axes[2].set_xlabel(label_ch1, fontsize=14)
     axes[2].set_ylabel(label_ch2, fontsize=14)
     axes[2].set_xlim(fmin1, fmax1); axes[2].set_ylim(fmin2, fmax2)
@@ -129,8 +131,8 @@ def main():
     fig.patches.append(arrow2)
     fig.text(0.64, 0.52, "Inverse\nMapping", ha='center', fontsize=12, color='gray', fontweight='bold')
 
-    plt.suptitle(f"The Copula Pipeline: {args.ch1.upper()} vs {args.ch2.upper()} Correlation | Trigger {args.trigger.upper()}", 
-                 fontsize=22, fontweight='bold', y=1.05)
+    # plt.suptitle(f"The Copula Pipeline: {args.ch1.upper()} vs {args.ch2.upper()} Correlation | Trigger {args.trigger.upper()}", 
+    plt.suptitle(f"The Copula Pipeline: {args.ch1.upper()} vs {args.ch2.upper()} Correlation", fontsize=22, fontweight='bold', y=1.05)
     fig.tight_layout(rect=[0, 0, 1, 0.96], w_pad=4.0)
     
     out_path = os.path.join(base_dir, "plots", f"copula_logic_{args.trigger}_{args.ch1}_{args.ch2}.png")

@@ -77,7 +77,7 @@ def main():
     args = parser.parse_args()
 
     # 1. Load data
-    t_global = np.load(args.input)
+    t_global = np.load(args.input)[:10000]
     t_global = np.sort(t_global)
     
     # Define a range of thresholds to test (e.g., 80th to 99.5th percentile)
