@@ -32,8 +32,12 @@ def main(args):
     v_bins = ATLAS_BINS[(ATLAS_BINS >= fmin_val) & (ATLAS_BINS <= fmax_val)]
     centers = (v_bins[:-1] + v_bins[1:]) / 2
     
-    # Evaluate smooth 5-parameter background function
-    bkg_expected = FiveParam(args.cms, centers, *d_nom['parameters'])
+    # Evaluate smooth 5-parameter background function.
+    # FiveParam returns a density (dN/dm), so multiply by each bin's width to
+    # get expected counts per bin. ATLAS bins are variable-width, so use the
+    # per-bin np.diff(v_bins) (aligned with centers), not a single scalar.
+    bin_widths = np.diff(v_bins)
+    bkg_expected = FiveParam(args.cms, centers, *d_nom['parameters']) * bin_widths
     bkg_expected = np.maximum(bkg_expected, 0)
     
     if np.sum(bkg_expected) <= 0:
@@ -48,48 +52,51 @@ def main(args):
     u_col_valid = None
     u_bounds = (0.0, 1.0)
     
-    if args.method in ["poisson_bootstrap", "copula"]:
+    if args.method == "poisson_bootstrap":
+        # Bootstrap resamples the actual event masses, so it needs the mass matrix.
         mass_path = os.path.join(base_dir, "data", f"masses_{args.trigger}.npz")
         if not os.path.exists(mass_path):
             print(f"Error: Raw mass data required for {args.method} not found -> {mass_path}")
             sys.exit(1)
-            
+
         f_mass = np.load(mass_path)
-        mass_matrix = f_mass['masses']
         col_names = list(f_mass['columns'])
-        
         try:
             idx = col_names.index(f"M{args.channel}")
         except ValueError:
             print(f"Error: Channel M{args.channel} not found in mass matrix.")
             sys.exit(1)
-            
-        masses = mass_matrix[:, idx]
+
+        masses = f_mass['masses'][:, idx]
         raw_valid_masses = masses[masses > 0] * args.cms
         N_raw_events = len(raw_valid_masses)
-        print(f"Loaded {N_raw_events} valid raw events for {args.method} sampling.")
+        print(f"Loaded {N_raw_events} valid raw events for bootstrap sampling.")
 
-        if args.method == "copula":
-            # Calculate the exact uniform bounds from the mass truncation
-            if N_raw_events > 0:
-                u_min = np.sum(raw_valid_masses < v_bins[0]) / N_raw_events
-                u_max = np.sum(raw_valid_masses <= v_bins[-1]) / N_raw_events
-                u_bounds = (u_min, u_max)
+    elif args.method == "copula":
+        # Fully self-contained: the copula file carries the uniform ranks and the
+        # precomputed (u_min, u_max) truncation bounds. No masses needed here.
+        copula_path = os.path.join(base_dir, "data", f"copula_{args.trigger}.npz")
+        if not os.path.exists(copula_path):
+            print(f"Error: Copula matrix not found -> {copula_path}")
+            sys.exit(1)
 
-            # Load the copula matrix and extract the valid 1D uniform column
-            copula_path = os.path.join(base_dir, "data", f"copula_{args.trigger}.npz")
-            if not os.path.exists(copula_path):
-                print(f"Error: Copula matrix not found -> {copula_path}")
-                sys.exit(1)
-            
-            f_copula = np.load(copula_path)
-            copula_matrix = f_copula['copula']
-            col_names_cop = list(f_copula['columns'])
+        f_copula = np.load(copula_path)
+        col_names_cop = list(f_copula['columns'])
+        try:
             idx_cop = col_names_cop.index(f"M{args.channel}")
-            
-            u_col_all = copula_matrix[:, idx_cop]
-            u_col_valid = u_col_all[u_col_all >= 0]
-            print(f"Loaded {len(u_col_valid)} uniform copula ranks.")
+        except ValueError:
+            print(f"Error: Channel M{args.channel} not found in copula matrix.")
+            sys.exit(1)
+
+        u_col_all = f_copula['copula'][:, idx_cop]
+        u_col_valid = u_col_all[u_col_all >= 0]
+        print(f"Loaded {len(u_col_valid)} uniform copula ranks.")
+
+        if 'u_bounds' not in f_copula.files:
+            print("Error: copula file has no 'u_bounds'. Re-run extract_copula.py "
+                  "(it now precomputes the truncation bounds).")
+            sys.exit(1)
+        u_bounds = tuple(f_copula['u_bounds'][idx_cop])
 
     # --- 3. TOY GENERATION & BUMPHUNTER SCANS ---
     stats = []
@@ -169,7 +176,7 @@ if __name__ == '__main__':
     p = ArgumentParser(description="Run single-histogram pseudo-experiments.")
     p.add_argument('--trigger', type=str, required=True, help="Trigger name (e.g., t2)")
     p.add_argument('--channel', type=str, required=True, help="Channel name (e.g., jj, jb)")
-    p.add_argument('--toys', type=int, default=100000, help="Number of pseudo-experiments to run")
+    p.add_argument('--toys', type=int, default=100, help="Number of pseudo-experiments to run")
     p.add_argument('--method', choices=["naive", "poisson_bootstrap", "copula"], required=True, help="Toy generation method")
     p.add_argument('--cms', type=float, default=13000., help="Center of mass energy")
     main(p.parse_args())

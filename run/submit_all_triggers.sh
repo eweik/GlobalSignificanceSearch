@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Default values if no arguments are provided
-TOTAL_TOYS=${1:-500000}
-TOYS_PER_JOB=${2:-25000}
+TOTAL_TOYS=${1:-1000000}
+TOYS_PER_JOB=${2:-10000}
 
 # Calculate jobs per method
 N_JOBS=$((TOTAL_TOYS / TOYS_PER_JOB))

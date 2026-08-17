@@ -27,8 +27,10 @@ def main(args):
     bkg_expectations, channel_info = {}, {}
     overlap_map = TRIGGER_OVERLAPS.get(args.trigger.lower(), TRIGGER_OVERLAPS["default"])
     
-    # Load mass matrices early if needed for background OR toy generation
-    needs_mass_matrix = (args.bkg == "matrix") or args.method in ["poisson_event", "exclusive_categories", "decorrelated_bootstrap"] or ("copula" in args.method)
+    # Load mass matrices early if needed for background OR toy generation.
+    # Copula methods no longer need it: u_bounds are read from the copula file.
+    # (bkg == "matrix" still loads it, since that background source needs masses.)
+    needs_mass_matrix = (args.bkg == "matrix") or args.method in ["poisson_event", "exclusive_categories", "decorrelated_bootstrap"]
     mass_matrix_full, cols_mass = None, None
     if needs_mass_matrix:
         mass_path = os.path.join(base_dir, "data", f"masses_{args.trigger}.npz")
@@ -78,23 +80,14 @@ def main(args):
         matrix, col_names = f['copula'], list(f['columns'])
         cdfs = {m: np.cumsum(b) / np.sum(b) for m, b in bkg_expectations.items()}
         
-        # Exact phase-space truncation bounds in uniform space
-        for m, b in bkg_expectations.items():
-            idx = cols_mass.index(f"M{m}")
-            masses = mass_matrix_full[:, idx]
-            valid_masses = masses[masses > 0] * args.cms
-
-            fmin_val = channel_info[m]['bins'][0]
-            fmax_val = channel_info[m]['bins'][-1]
-
-            N_valid = len(valid_masses)
-            if N_valid > 0:
-                u_min = np.sum(valid_masses < fmin_val) / N_valid
-                u_max = np.sum(valid_masses <= fmax_val) / N_valid
-            else:
-                u_min, u_max = 0.0, 1.0
-            
-            u_bounds[m] = (u_min, u_max)
+        # Phase-space truncation bounds in uniform space, precomputed per channel
+        # by extract_copula (on the same AR-cut population as the ranks).
+        if 'u_bounds' not in f.files:
+            print("Error: copula file has no 'u_bounds'. Re-run extract_copula.py "
+                  "(it now precomputes the truncation bounds)."); sys.exit(1)
+        for m in bkg_expectations:
+            idx = col_names.index(f"M{m}")
+            u_bounds[m] = tuple(f['u_bounds'][idx])
 
         # ---------------------------------------------------------
         # Compute Global Covariance Matrix for Parametric Copulas
