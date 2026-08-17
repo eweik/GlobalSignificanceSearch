@@ -49,7 +49,12 @@ def main(args):
                 
                 # Select background expectation source
                 if args.bkg == "func":
-                    counts_nom = FiveParam(args.cms, c, *d_nom['parameters']) 
+                    # FiveParam returns a density (dN/dm), so multiply by each
+                    # bin's width to get expected counts per bin. ATLAS bins are
+                    # variable-width, so use per-bin np.diff(v_bins), not a
+                    # single scalar width (widths align with the centers c).
+                    bin_widths = np.diff(v_bins)
+                    counts_nom = FiveParam(args.cms, c, *d_nom['parameters']) * bin_widths
                 else: # args.bkg == "matrix"
                     idx = cols_mass.index(f"M{m}")
                     masses = mass_matrix_full[:, idx]
