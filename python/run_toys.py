@@ -129,6 +129,57 @@ def main(args):
             unique_patterns = np.unique(event_patterns)
             pattern_indices = {p: np.where(event_patterns == p)[0] for p in unique_patterns}
 
+
+    '''
+    # ---------------------------------------------------------
+    # NORMALIZATION DIAGNOSTIC CHECK
+    # ---------------------------------------------------------
+    print("\n" + "="*50)
+    print("NORMALIZATION DIAGNOSTIC (Expected Event Yields)")
+    print("="*50)
+    
+    # Safely load the mass matrix for this diagnostic if it wasn't loaded earlier
+    diag_cols_mass = cols_mass
+    diag_mass_matrix = mass_matrix_full
+    if diag_cols_mass is None or diag_mass_matrix is None:
+        diag_mass_path = os.path.join(base_dir, "data", f"masses_{args.trigger}.npz")
+        try:
+            f_diag = np.load(diag_mass_path)
+            diag_mass_matrix = f_diag['masses']
+            diag_cols_mass = list(f_diag['columns'])
+        except Exception as e:
+            print(f"Could not load mass matrix for diagnostic: {e}")
+            diag_cols_mass = None
+
+    if diag_cols_mass is not None:
+        for m, b in bkg_expectations.items():
+            # 1. What the 'naive' method expects (integral of the background fit)
+            fit_expected = np.sum(b)
+            
+            # 2. What the 'copula' methods expect (empirical counts in the window)
+            try:
+                idx = diag_cols_mass.index(f"M{m}")
+                masses = diag_mass_matrix[:, idx]
+                valid_masses = masses[masses > 0] * args.cms
+                
+                fmin_val = channel_info[m]['bins'][0]
+                fmax_val = channel_info[m]['bins'][-1]
+                
+                # Count exact number of matrix events falling inside the fit window
+                empirical_expected = np.sum((valid_masses >= fmin_val) & (valid_masses <= fmax_val))
+                
+                diff_pct = ((empirical_expected - fit_expected) / fit_expected) * 100 if fit_expected > 0 else 0
+                
+                print(f"Channel {m}:")
+                print(f"  Naive (Fit Integral):        {fit_expected:.2f} events")
+                print(f"  Copula (Matrix Empirical):   {empirical_expected:.2f} events")
+                print(f"  Gap (Copula vs Naive):       {diff_pct:+.2f}%")
+            except ValueError:
+                print(f"Channel {m}: M{m} not found in columns.")
+    print("="*50 + "\n")
+    # ---------------------------------------------------------
+    '''
+
     stats = []
     attempts = 0
     max_attempts = args.toys * 50 
@@ -152,11 +203,28 @@ def main(args):
         # ---------------------------------------------------------
         if args.method == "naive":
             for m, b in bkg_expectations.items():
-                toy = np.random.poisson(b)
+                # Get the empirical target normalization
+                idx = col_names.index(f"M{m}")
+                masses = mass_matrix_full[:, idx]
+                valid_masses = masses[masses > 0] * args.cms
+                fmin_val, fmax_val = channel_info[m]['bins'][0], channel_info[m]['bins'][-1]
+                empirical_expected = np.sum((valid_masses >= fmin_val) & (valid_masses <= fmax_val))
+
+                # Scale the functional shape to match the empirical data count
+                scale_factor = empirical_expected / np.sum(b)
+                b_scaled = b * scale_factor
+
+                toy = np.random.poisson(b_scaled)
                 if np.sum(toy) < 50: continue
-                
-                max_t = max(max_t, fast_bumphunter_stat(toy, b))
+
+                max_t = max(max_t, fast_bumphunter_stat(toy, b_scaled))
                 channels_searched += 1
+
+            # for m, b in bkg_expectations.items():
+            #     toy = np.random.poisson(b)
+            #     if np.sum(toy) < 50: continue
+            #     max_t = max(max_t, fast_bumphunter_stat(toy, b))
+            #     channels_searched += 1
         
         elif args.method == "linear":
             jj_b = bkg_expectations['jj']

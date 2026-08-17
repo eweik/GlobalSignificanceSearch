@@ -14,7 +14,8 @@ def extract_copula(input_root, output_npz):
         print(f"Failed to read columns: {e}")
         return
 
-    N = len(data_dict["Mjj"])
+    N = len(data_dict["Mjj_data100percent"])
+    # N = len(data_dict["Mjj"])
     print(f"Loaded {N} total events.")
     copula_matrix = np.zeros((N, len(mass_vars)))
     
@@ -23,6 +24,7 @@ def extract_copula(input_root, output_npz):
 
     print("Converting valid masses to empirical CDF quantiles...")
     for i, var in enumerate(mass_vars):
+        var += "_data100percent"
         data = data_dict[var]
 
         # Find the physically valid masses (ignoring exact 0s or near-0 floats)

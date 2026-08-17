@@ -25,6 +25,8 @@ def main():
     # methods = ["naive", "copula", "poisson_event",  "decorrelated_bootstrap", "decorrelated_copula"]
     methods = ["copula", "naive", "gaussian_copula", "student_t_copula"]
     methods = ["copula", "naive"]
+    methods = ["copula", "naive", "gaussian_copula", "student_t_copula"]
+    methods = ["naive", "copula", "poisson_event",  "decorrelated_bootstrap", "decorrelated_copula"]
     # methods = ["naive", "poisson_event", "copula"]
     # methods = ["naive", "poisson_event"]
     colors = {"naive": "red", "linear": "blue", "copula": "green",
@@ -47,8 +49,9 @@ def main():
     for method in methods:
         # 1. Load the generated data for this method (Fixed the file_list override bug)
         # First, look for individual unmerged files with the appropriate background tag
-        file_pattern = f"results/global_stat_{trigger}_{method}_*_{bkg_tag}.npy"
-        file_list = glob.glob(file_pattern)
+        # file_pattern = f"results/global_stat_{trigger}_{method}_*_{bkg_tag}.npy"
+        # file_list = glob.glob(file_pattern)
+        file_list = None
         
         if not file_list:
             # Fallback to merged directories

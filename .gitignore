@@ -16,3 +16,4 @@ plots/*.png
 plots/
 logs/
 run/logs/
+data/
