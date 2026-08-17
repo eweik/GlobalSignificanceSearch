@@ -28,8 +28,8 @@ for TRIGGER in t1 t2 t3 t4 t5 t6 t7; do
     # Loop over all 5 methods
     # for METHOD in naive linear copula; do
     # for METHOD in decorrelated_bootstrap; do
-    for METHOD in naive copula poisson_event decorrelated_bootstrap; do
-    # for METHOD in copula exclusive_categories; do
+    # for METHOD in naive copula poisson_event decorrelated_bootstrap; do
+    for METHOD in copula; do
         condor_submit run/submit_toys.sub \
             trigger=$TRIGGER \
             method=$METHOD \
