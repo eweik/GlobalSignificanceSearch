@@ -1,9 +1,10 @@
 #!/bin/bash
 
 # Default values if no arguments are provided
-TRIGGER=${1:-"t2"}
+TRIGGER=${1:-"t7"}
 TOTAL_TOYS=${2:-100000}
-TOYS_PER_JOB=${3:-10000}
+# TOYS_PER_JOB=${3:-10000}
+TOYS_PER_JOB=${3:-1000}
 
 # Calculate how many jobs are needed per method
 N_JOBS=$((TOTAL_TOYS / TOYS_PER_JOB))
@@ -25,7 +26,7 @@ echo "================================================="
 # for METHOD in decorrelated_bootstrap; do
 # for METHOD in poisson_event exclusive_categories; do
 # for METHOD in gaussian_copula student_t_copula; do
-for METHOD in naive; do
+for METHOD in copula; do
     echo "Submitting $METHOD..."
     condor_submit run/submit_toys.sub \
         trigger=$TRIGGER \

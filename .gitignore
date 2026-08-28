@@ -10,6 +10,7 @@ __pycache__/
 *.csv
 
 # Ignore local figures/output
+test.py
 results/
 plots/*.pdf
 plots/*.png

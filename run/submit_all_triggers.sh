@@ -6,7 +6,7 @@ TOYS_PER_JOB=${2:-10000}
 
 # Calculate jobs per method
 N_JOBS=$((TOTAL_TOYS / TOYS_PER_JOB))
-TOTAL_SUBMISSIONS=$((7 * 4 * N_JOBS))
+TOTAL_SUBMISSIONS=$((7 * N_JOBS))
 
 # Ensure local directories exist before submission
 mkdir -p run/logs results

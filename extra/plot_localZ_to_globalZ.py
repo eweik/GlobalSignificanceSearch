@@ -8,9 +8,9 @@ import os
 
 def main():
     parser = argparse.ArgumentParser(description="Map Local Z to Global Z.")
-    parser.add_argument("--ExpectedLocalZvalue", type=float, default=5.0,
+    parser.add_argument("--ExpectedLocalZvalue", type=float, default=6.0,
                         help="Expected local significance (default: 5.0)")
-    parser.add_argument("--trigger", type=str, default="t2",
+    parser.add_argument("--trigger", type=str, default="t1",
                         help="Trigger to analyze (default: t2)")
     # --- NEW: Argument to select background type ---
     parser.add_argument("--bkg", choices=["func", "matrix"], default="func",
@@ -29,6 +29,7 @@ def main():
     methods = ["naive", "copula", "poisson_event",  "decorrelated_bootstrap", "decorrelated_copula"]
     # methods = ["naive", "poisson_event", "copula"]
     # methods = ["naive", "poisson_event"]
+    methods = ["copula"]
     colors = {"naive": "red", "linear": "blue", "copula": "green",
               "poisson_event": "blue", "decorrelated_copula": "purple",
               "decorrelated_bootstrap": "olive", "gaussian_copula": "rebeccapurple", 
@@ -55,7 +56,7 @@ def main():
         
         if not file_list:
             # Fallback to merged directories
-            file_list = glob.glob(f"results/merged/final_{trigger}_{method}_{bkg_tag}.npy")
+            file_list = glob.glob(f"results/merged/final_{trigger}_{method}.npy")
             if not file_list:
                 # Absolute fallback to legacy naming if tags aren't found
                 file_list = glob.glob(f"results/merged_5param/final_{trigger}_{method}.npy")
@@ -65,6 +66,7 @@ def main():
                     print(f"Warning: No data found for {method} with tag {bkg_tag}. Skipping.")
                     continue
 
+        print(file_list)
         arrays = [np.load(f) for f in file_list]
         t_max_dist = np.concatenate(arrays)
         t_max_dist = t_max_dist[np.isfinite(t_max_dist)]
